@@ -7,7 +7,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.ultrastream.app.data.models.StreamItem
 import com.ultrastream.app.ui.components.bottomsheets.StreamsSheet
 
 @Composable
@@ -37,7 +36,7 @@ fun DetailsScreen(
                     Text(meta.year, style = MaterialTheme.typography.bodyMedium)
                 }
                 if (meta.imdbRating != null) {
-                    Text("⭐ $meta.imdbRating", style = MaterialTheme.typography.bodyMedium)
+                    Text("⭐ ${meta.imdbRating}", style = MaterialTheme.typography.bodyMedium)
                 }
                 Text(meta.description ?: "", style = MaterialTheme.typography.bodyLarge)
                 Spacer(modifier = Modifier.height(8.dp))
@@ -59,7 +58,6 @@ fun DetailsScreen(
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(
                     onClick = {
-                        // Fetch streams and show sheet
                         viewModel.loadStreams(meta.id, meta.type)
                         showStreamsSheet = true
                     },
@@ -68,11 +66,10 @@ fun DetailsScreen(
                     Text(if (uiState.streamsLoading) "Loading..." else "Find Streams")
                 }
             }
-            // Episodes if series
             if (meta.videos != null && meta.videos.isNotEmpty()) {
                 item {
                     Text("Episodes", style = MaterialTheme.typography.titleLarge)
-                    meta.videos?.forEach { video ->
+                    meta.videos.forEach { video ->
                         Text("S${video.season}E${video.episode} - ${video.name ?: "Episode"}")
                     }
                 }
@@ -90,16 +87,15 @@ fun DetailsScreen(
         }
     }
 
-    // Streams bottom sheet
     if (showStreamsSheet && uiState.streams.isNotEmpty()) {
         StreamsSheet(
             streams = uiState.streams,
             onDismiss = { showStreamsSheet = false },
             onStreamClick = { stream ->
-                val url = stream.url ?: stream.streamUrl ?: stream.externalUrl
-                if (!url.isNullOrBlank()) {
+                val streamUrl = stream.url ?: stream.streamUrl ?: stream.externalUrl
+                if (!streamUrl.isNullOrBlank()) {
                     showStreamsSheet = false
-                    onPlay(url, meta?.name ?: "Stream")
+                    onPlay(streamUrl, meta?.name ?: "Stream")
                 }
             }
         )

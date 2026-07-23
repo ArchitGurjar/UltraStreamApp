@@ -1,7 +1,6 @@
 package com.ultrastream.app.ui.screens.player
 
 import android.content.Context
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
@@ -17,7 +16,6 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -70,7 +68,6 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
                 _player.value = exoPlayer
                 _title.value = title
 
-                // Listen to player events
                 val listener = object : Player.Listener {
                     override fun onPlaybackStateChanged(playbackState: Int) {
                         when (playbackState) {
@@ -81,9 +78,7 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
                             Player.STATE_ENDED -> {
                                 _isPlaying.value = false
                             }
-                            Player.STATE_BUFFERING -> {
-                                // can show buffering indicator
-                            }
+                            else -> {}
                         }
                     }
 
@@ -94,15 +89,10 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
                     override fun onPlayerError(error: PlaybackException) {
                         _error.value = error.message
                     }
-
-                    override fun onVolumeChanged(volume: Float) {
-                        _volume.value = volume
-                    }
                 }
                 exoPlayer.addListener(listener)
                 playerListener = listener
 
-                // Start a periodic update of current position
                 viewModelScope.launch {
                     while (true) {
                         _currentPosition.value = exoPlayer.currentPosition
@@ -171,21 +161,11 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
     }
 
     fun releasePlayer() {
-        _player.value?.removeListener(playerListener)
+        playerListener?.let { listener ->
+            _player.value?.removeListener(listener)
+        }
         _player.value?.release()
         _player.value = null
         playerListener = null
     }
-
-    data class PlayerUiState(
-        val isPlaying: Boolean = false,
-        val title: String = "",
-        val currentUrl: String = "",
-        val speed: Float = 1.0f,
-        val volume: Float = 1.0f,
-        val brightness: Float = 1.0f,
-        val isFullscreen: Boolean = false,
-        val isPiP: Boolean = false,
-        val error: String? = null
-    )
 }

@@ -46,6 +46,8 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+data class NavItem(val screen: Screen, val title: String, val iconRes: Int)
+
 @Composable
 fun UltraStreamNavHost() {
     val navController = rememberNavController()
@@ -55,19 +57,19 @@ fun UltraStreamNavHost() {
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentDestination = navBackStackEntry?.destination
                 val items = listOf(
-                    Screen.Home to "Home" to R.drawable.ic_home,
-                    Screen.Library to "Library" to R.drawable.ic_library,
-                    Screen.Search to "Search" to R.drawable.ic_search,
-                    Screen.Addons to "Addons" to R.drawable.ic_addon,
-                    Screen.Profile to "Profile" to R.drawable.ic_profile
+                    NavItem(Screen.Home, "Home", R.drawable.ic_home),
+                    NavItem(Screen.Library, "Library", R.drawable.ic_library),
+                    NavItem(Screen.Search, "Search", R.drawable.ic_search),
+                    NavItem(Screen.Addons, "Addons", R.drawable.ic_addon),
+                    NavItem(Screen.Profile, "Profile", R.drawable.ic_profile)
                 )
-                items.forEach { (screen, title, iconRes) ->
+                items.forEach { item ->
                     NavigationBarItem(
-                        icon = { Icon(imageVector = ImageVector.vectorResource(id = iconRes), contentDescription = title) },
-                        label = { Text(title) },
-                        selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                        icon = { Icon(imageVector = ImageVector.vectorResource(id = item.iconRes), contentDescription = item.title) },
+                        label = { Text(item.title) },
+                        selected = currentDestination?.hierarchy?.any { it.route == item.screen.route } == true,
                         onClick = {
-                            navController.navigate(screen.route) {
+                            navController.navigate(item.screen.route) {
                                 popUpTo(navController.graph.findStartDestination().id) {
                                     saveState = true
                                 }
@@ -114,7 +116,6 @@ fun UltraStreamNavHost() {
                     type = type,
                     onBack = { navController.popBackStack() },
                     onPlay = { url, title ->
-                        // Encode URL to prevent navigation crash
                         val encodedUrl = URLEncoder.encode(url, StandardCharsets.UTF_8.toString())
                         navController.navigate(Screen.Player.pass(encodedUrl))
                     }
@@ -123,7 +124,9 @@ fun UltraStreamNavHost() {
             composable(Screen.Player.route) { backStackEntry ->
                 val encodedUrl = backStackEntry.arguments?.getString("url") ?: ""
                 val url = URLDecoder.decode(encodedUrl, StandardCharsets.UTF_8.toString())
-                PlayerScreen(url = url, title = "Now Playing")
+                PlayerScreen(url = url, title = "Now Playing") {
+                    navController.popBackStack()
+                }
             }
         }
     }
