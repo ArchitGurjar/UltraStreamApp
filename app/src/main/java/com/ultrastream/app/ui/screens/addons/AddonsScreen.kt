@@ -26,6 +26,8 @@ fun AddonsScreen(
     
     var addonUrl by remember { mutableStateOf("") }
     var debridKey by remember { mutableStateOf(uiState.debridKey) }
+    // New Import JSON Text Field State
+    var jsonInputText by remember { mutableStateOf("") }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -65,6 +67,19 @@ fun AddonsScreen(
         // Import & Export exact Stremio JSON Array
         item {
             Text("Sync / Backup", style = MaterialTheme.typography.titleMedium)
+            
+            // JSON Input Field (Expands dynamically to fit text)
+            OutlinedTextField(
+                value = jsonInputText,
+                onValueChange = { jsonInputText = it },
+                label = { Text("Paste Import JSON here") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .wrapContentHeight(),
+                minLines = 3,
+                maxLines = 15
+            )
+            
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 Button(
                     onClick = {
@@ -80,17 +95,18 @@ fun AddonsScreen(
                 }
                 Button(
                     onClick = {
-                        val json = clipboardManager.getText()?.text ?: ""
-                        if (json.isBlank()) {
-                            Toast.makeText(context, "Clipboard is empty!", Toast.LENGTH_SHORT).show()
+                        // STRICT: Only read from the TextField state, NO Clipboard fallback
+                        if (jsonInputText.isBlank()) {
+                            Toast.makeText(context, "Import JSON field is empty!", Toast.LENGTH_SHORT).show()
                             return@Button
                         }
                         scope.launch {
-                            val success = viewModel.importAddonsJson(json)
+                            val success = viewModel.importAddonsJson(jsonInputText)
                             if (success) {
+                                jsonInputText = ""
                                 Toast.makeText(context, "✅ Addons Imported!", Toast.LENGTH_SHORT).show()
                             } else {
-                                Toast.makeText(context, "❌ Invalid JSON format in clipboard.", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "❌ Invalid JSON format.", Toast.LENGTH_SHORT).show()
                             }
                         }
                     },

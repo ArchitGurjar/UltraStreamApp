@@ -1,59 +1,59 @@
 package com.ultrastream.app.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 private val DarkColorScheme = darkColorScheme(
     primary = AccentBlue,
-    onPrimary = TextMainDark,
-    secondary = AccentPurple,
-    onSecondary = TextMainDark,
-    tertiary = AccentGold,
-    onTertiary = TextMainDark,
+    onPrimary = Color.Black,
     background = BackgroundDark,
-    onBackground = TextMainDark,
     surface = SurfaceDark,
-    onSurface = TextMainDark,
-    surfaceVariant = CardDark,
-    onSurfaceVariant = TextMutedDark,
-    error = AccentRed,
-    onError = TextMainDark
+    onSurface = TextMain,
+    onSurfaceVariant = TextMuted
 )
 
 private val LightColorScheme = lightColorScheme(
     primary = AccentBlue,
-    onPrimary = TextMainLight,
-    secondary = AccentPurple,
-    onSecondary = TextMainLight,
-    tertiary = AccentGold,
-    onTertiary = TextMainLight,
-    background = BackgroundLight,
-    onBackground = TextMainLight,
-    surface = SurfaceLight,
-    onSurface = TextMainLight,
-    surfaceVariant = CardLight,
-    onSurfaceVariant = TextMutedLight,
-    error = AccentRed,
-    onError = TextMainLight
+    onPrimary = Color.Black,
+    background = Color(0xFFF3F4F6),
+    surface = Color.White,
+    onSurface = Color(0xFF111827),
+    onSurfaceVariant = Color(0xFF6B7280)
 )
 
-// Local composition for custom colors if needed
-val LocalCustomColors = staticCompositionLocalOf { CustomColors() }
+val Shapes = Shapes(
+    extraSmall = RoundedCornerShape(4.dp),
+    small = RoundedCornerShape(8.dp),
+    medium = RoundedCornerShape(16.dp),
+    large = RoundedCornerShape(24.dp),
+    extraLarge = RoundedCornerShape(50.dp) // Pill / Button shape
+)
 
-data class CustomColors(
-    val accentBlue: androidx.compose.ui.graphics.Color = AccentBlue,
-    val accentGold: androidx.compose.ui.graphics.Color = AccentGold,
-    val accentRed: androidx.compose.ui.graphics.Color = AccentRed,
-    val accentGreen: androidx.compose.ui.graphics.Color = AccentGreen,
-    val accentPurple: androidx.compose.ui.graphics.Color = AccentPurple,
-    val accentPink: androidx.compose.ui.graphics.Color = AccentPink,
-    val accentOrange: androidx.compose.ui.graphics.Color = AccentOrange,
-    val textMuted: androidx.compose.ui.graphics.Color = TextMutedDark
+val Typography = Typography(
+    headlineLarge = TextStyle(fontWeight = FontWeight.Black, fontSize = 32.sp, lineHeight = 40.sp),
+    headlineMedium = TextStyle(fontWeight = FontWeight.Black, fontSize = 28.sp, lineHeight = 36.sp),
+    headlineSmall = TextStyle(fontWeight = FontWeight.ExtraBold, fontSize = 24.sp, lineHeight = 32.sp),
+    titleLarge = TextStyle(fontWeight = FontWeight.Bold, fontSize = 20.sp, lineHeight = 28.sp),
+    titleMedium = TextStyle(fontWeight = FontWeight.Bold, fontSize = 16.sp, lineHeight = 24.sp),
+    titleSmall = TextStyle(fontWeight = FontWeight.Bold, fontSize = 14.sp, lineHeight = 20.sp),
+    bodyLarge = TextStyle(fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 24.sp),
+    bodyMedium = TextStyle(fontWeight = FontWeight.Normal, fontSize = 14.sp, lineHeight = 20.sp),
+    bodySmall = TextStyle(fontWeight = FontWeight.Normal, fontSize = 12.sp, lineHeight = 16.sp),
+    labelLarge = TextStyle(fontWeight = FontWeight.Bold, fontSize = 14.sp, lineHeight = 20.sp),
+    labelMedium = TextStyle(fontWeight = FontWeight.Medium, fontSize = 12.sp, lineHeight = 16.sp),
+    labelSmall = TextStyle(fontWeight = FontWeight.Medium, fontSize = 10.sp, lineHeight = 14.sp)
 )
 
 @Composable
@@ -62,24 +62,10 @@ fun UltraStreamTheme(
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
-    val customColors = if (darkTheme) {
-        CustomColors(
-            textMuted = TextMutedDark
-        )
-    } else {
-        CustomColors(
-            textMuted = TextMutedLight
-        )
-    }
-
-    CompositionLocalProvider(
-        LocalCustomColors provides customColors
-    ) {
-        MaterialTheme(
-            colorScheme = colorScheme,
-            typography = Typography,
-            shapes = Shapes,
-            content = content
-        )
-    }
+    MaterialTheme(
+        colorScheme = colorScheme,
+        typography = Typography,
+        shapes = Shapes,
+        content = content
+    )
 }

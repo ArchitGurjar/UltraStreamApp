@@ -1,19 +1,33 @@
 package com.ultrastream.app.ui.screens.details
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
 import com.ultrastream.app.data.models.StreamItem
+import com.ultrastream.app.data.models.Video
+import com.ultrastream.app.ui.components.EpisodeCard
+import com.ultrastream.app.ui.components.StreamCard
 import com.ultrastream.app.ui.components.bottomsheets.SeasonsSheet
 import com.ultrastream.app.ui.components.bottomsheets.StreamsSheet
+import com.ultrastream.app.ui.theme.AccentBlue
+import com.ultrastream.app.ui.theme.BackgroundDark
+import com.ultrastream.app.ui.theme.TextMuted
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,94 +57,245 @@ fun DetailsScreen(
         }
     }
 
-    if (meta != null) {
-        // 🚀 ADVANCED FIX: Using LazyVerticalGrid as the main root container!
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 80.dp),
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // 1. Header Section (Full Width Span)
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                Column {
-                    Text(meta.name, style = MaterialTheme.typography.headlineMedium)
-                    if (meta.year != null) {
-                        Text(meta.year, style = MaterialTheme.typography.bodyMedium)
-                    }
-                    if (meta.imdbRating != null) {
-                        Text("⭐ ${meta.imdbRating}", style = MaterialTheme.typography.bodyMedium)
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(meta.description ?: "", style = MaterialTheme.typography.bodyLarge)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        Button(
-                            onClick = { viewModel.toggleLibrary(meta) },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(if (uiState.inLibrary) "Remove from Library" else "Add to Library")
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = { viewModel.toggleWatchlist(meta) },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(if (uiState.inWatchlist) "Remove from Watchlist" else "Add to Watchlist")
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
-            }
-
-            // 2. Season Selector & Episodes Section
-            if (meta.type == "series" || meta.type == "anime") {
-                val seasons = meta.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: emptyList()
-                val episodes = meta.videos
-                    ?.filter { it.season == uiState.selectedSeason }
-                    ?.sortedBy { it.episode } ?: emptyList()
-
-                // Season Title & Button (Full Width Span)
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+    Box(modifier = Modifier.fillMaxSize().background(BackgroundDark)) {
+        if (meta != null) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // 1. Hero Section
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(350.dp)
                     ) {
-                        Text(
-                            text = "Season ${uiState.selectedSeason ?: ""}",
-                            style = MaterialTheme.typography.titleLarge
+                        AsyncImage(
+                            model = meta.background ?: meta.poster,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
                         )
-                        if (seasons.isNotEmpty()) {
-                            Button(onClick = { showSeasonsSheet = true }) {
-                                Text("Change Season")
+                        // Gradient Overlay
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color.Transparent,
+                                            BackgroundDark.copy(alpha = 0.8f),
+                                            BackgroundDark
+                                        ),
+                                        startY = 0.3f
+                                    )
+                                )
+                        )
+
+                        // Top Bar Overlay
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 16.dp, start = 16.dp, end = 16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = Color.Black.copy(alpha = 0.6f),
+                                modifier = Modifier.size(44.dp)
+                            ) {
+                                IconButton(onClick = onBack) {
+                                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                                }
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = Color.Black.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(44.dp)
+                                ) {
+                                    IconButton(onClick = { /* View History */ }) {
+                                        Icon(Icons.Default.History, contentDescription = "History", tint = Color.White)
+                                    }
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = Color.Black.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(44.dp)
+                                ) {
+                                    IconButton(onClick = { viewModel.toggleLibrary(meta) }) {
+                                        Icon(
+                                            imageVector = if (uiState.inLibrary) Icons.Default.Bookmark else Icons.Outlined.BookmarkBorder,
+                                            contentDescription = "Bookmark",
+                                            tint = if (uiState.inLibrary) AccentBlue else Color.White
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Hero Content
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(16.dp)
+                                .fillMaxWidth()
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = Color.Black.copy(alpha = 0.5f),
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
+                            ) {
+                                Text(
+                                    text = meta.type.uppercase(),
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = meta.name,
+                                style = MaterialTheme.typography.headlineLarge,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(meta.year ?: "", style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                                Text("•", style = MaterialTheme.typography.bodyMedium, color = TextMuted)
+                                Text(meta.runtime ?: "N/A", style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                                Text("•", style = MaterialTheme.typography.bodyMedium, color = TextMuted)
+                                Text("⭐ ${meta.imdbRating ?: "N/A"}", style = MaterialTheme.typography.bodyMedium, color = AccentBlue, fontWeight = FontWeight.Bold)
+                                if (!meta.genre.isNullOrEmpty()) {
+                                    Text("•", style = MaterialTheme.typography.bodyMedium, color = TextMuted)
+                                    Text(meta.genre!!.take(2).joinToString(", "), style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = meta.description ?: "",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = TextMuted,
+                                maxLines = 4,
+                                softWrap = true
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            // Cast Chips
+                            if (!meta.cast.isNullOrEmpty()) {
+                                FlowRow(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    meta.cast!!.take(5).forEach { actor ->
+                                        Surface(
+                                            shape = RoundedCornerShape(50),
+                                            color = Color.White.copy(alpha = 0.1f),
+                                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+                                        ) {
+                                            Text(
+                                                text = actor,
+                                                color = Color.White,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                 }
 
-                // Episode Cards (Grid Layout - Adaptive sizing)
-                if (episodes.isNotEmpty()) {
-                    items(episodes) { video ->
-                        val epNum = video.episode ?: 0
-                        val isSelected = epNum == uiState.selectedEpisode
-                        Card(
-                            modifier = Modifier.height(60.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.surfaceVariant
-                            ),
+                // 2. Action Buttons
+                item {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Button(
                             onClick = {
-                                viewModel.selectEpisode(epNum)
-                            }
+                                viewModel.loadStreams(meta.id, meta.type, uiState.selectedSeason, uiState.selectedEpisode)
+                                showStreamsSheet = true
+                            },
+                            modifier = Modifier.fillMaxWidth().height(56.dp),
+                            shape = RoundedCornerShape(50),
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentBlue, contentColor = Color.Black)
                         ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                Text(
-                                    text = "E$epNum",
-                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary
-                                    else MaterialTheme.colorScheme.onSurface
+                            Icon(Icons.Default.Satellite, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(if (uiState.streamsLoading) "Loading Streams..." else "Find Streams", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = { /* Open IMDb */ },
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            shape = RoundedCornerShape(50),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
+                        ) {
+                            Icon(Icons.Default.Movie, contentDescription = null, tint = Color.White)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("View on IMDb", fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                    }
+                }
+
+                // 3. Episodes Section
+                if (meta.type == "series" || meta.type == "anime") {
+                    val seasons = meta.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: emptyList()
+                    val episodes = meta.videos
+                        ?.filter { it.season == uiState.selectedSeason }
+                        ?.sortedBy { it.episode } ?: emptyList()
+
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Episodes",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            if (seasons.isNotEmpty()) {
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = Color.White.copy(alpha = 0.1f),
+                                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text("Season ${uiState.selectedSeason ?: ""}", fontWeight = FontWeight.Bold)
+                                        Icon(Icons.Default.ExpandMore, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    }.clickable { showSeasonsSheet = true }
+                                }
+                            }
+                        }
+                    }
+
+                    // FIX: NO nested LazyVerticalGrid. Using a Standard Column
+                    item {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            episodes.forEach { video ->
+                                val epKey = "${meta.id}_s${video.season}_e${video.episode}"
+                                val isWatched = uiState.watchProgress?.let { 
+                                    // Logic to check if episode is fully watched
+                                    it.percent >= 100 
+                                } ?: false
+                                
+                                EpisodeCard(
+                                    video = video,
+                                    isWatched = isWatched,
+                                    progressPercent = uiState.watchProgress?.percent ?: 0,
+                                    onClick = {
+                                        viewModel.selectEpisode(video.episode ?: 0)
+                                        viewModel.loadStreams(meta.id, meta.type, uiState.selectedSeason, video.episode)
+                                        showStreamsSheet = true
+                                    }
                                 )
                             }
                         }
@@ -138,30 +303,14 @@ fun DetailsScreen(
                 }
             }
 
-            // 3. Footer Section (Find Streams Button - Full Width Span)
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                Column {
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Button(
-                        onClick = {
-                            viewModel.loadStreams(meta.id, meta.type, uiState.selectedSeason, uiState.selectedEpisode)
-                            showStreamsSheet = true
-                        },
-                        modifier = Modifier.fillMaxWidth().height(50.dp)
-                    ) {
-                        Text(if (uiState.streamsLoading) "Loading Streams..." else "Find Streams")
-                    }
-                    Spacer(modifier = Modifier.height(32.dp)) // Extra padding for bottom navigation
-                }
+        } else if (uiState.isLoading) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = AccentBlue)
             }
-        }
-    } else if (uiState.isLoading) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
-        }
-    } else if (uiState.error != null) {
-        Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
-            Text("Error: ${uiState.error}", color = MaterialTheme.colorScheme.error)
+        } else if (uiState.error != null) {
+            Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+                Text("Error: ${uiState.error}", color = MaterialTheme.colorScheme.error)
+            }
         }
     }
 
@@ -180,15 +329,28 @@ fun DetailsScreen(
     }
 
     if (showStreamsSheet && uiState.streams.isNotEmpty()) {
-        StreamsSheet(
-            streams = uiState.streams,
-            onDismiss = { showStreamsSheet = false },
-            onStreamClick = { stream ->
-                showStreamsSheet = false
-                viewModel.playStream(stream, meta?.name ?: "Stream") { resolvedStream, title ->
-                    onPlay(resolvedStream, title)
+        // Custom Streams Sheet Implementation using StreamCard
+        ModalBottomSheet(
+            onDismissRequest = { showStreamsSheet = false }
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Available Streams", style = MaterialTheme.typography.headlineSmall)
+                Spacer(modifier = Modifier.height(8.dp))
+                LazyColumn {
+                    items(uiState.streams) { stream ->
+                        StreamCard(
+                            stream = stream,
+                            onClick = {
+                                showStreamsSheet = false
+                                viewModel.playStream(stream, meta?.name ?: "Stream") { resolvedStream, title ->
+                                    onPlay(resolvedStream, title)
+                                }
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                 }
             }
-        )
+        }
     }
 }
