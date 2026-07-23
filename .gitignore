@@ -12,4 +12,3 @@
 *.keystore
 *.jks
 app/build
-gradle/wrapper/gradle-wrapper.jar
