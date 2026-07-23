@@ -12,6 +12,9 @@ interface HistoryDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(item: HistoryItem)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(items: List<HistoryItem>)
+
     @Query("SELECT * FROM history ORDER BY timestamp DESC")
     suspend fun getAll(): List<HistoryItem>
 
@@ -24,6 +27,3 @@ interface HistoryDao {
     @Query("DELETE FROM history")
     suspend fun deleteAll()
 }
-
-    @Query("DELETE FROM history")
-    suspend fun deleteAll()

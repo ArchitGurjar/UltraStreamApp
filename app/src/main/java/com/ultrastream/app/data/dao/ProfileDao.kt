@@ -12,6 +12,9 @@ interface ProfileDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(profile: Profile)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(profiles: List<Profile>)
+
     @Query("SELECT * FROM profiles")
     suspend fun getAll(): List<Profile>
 
@@ -20,7 +23,7 @@ interface ProfileDao {
 
     @Delete
     suspend fun delete(profile: Profile)
-}
 
     @Query("DELETE FROM profiles")
     suspend fun deleteAll()
+}

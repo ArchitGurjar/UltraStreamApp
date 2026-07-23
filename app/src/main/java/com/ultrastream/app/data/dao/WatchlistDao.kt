@@ -12,6 +12,9 @@ interface WatchlistDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(item: WatchlistItem)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(items: List<WatchlistItem>)
+
     @Query("SELECT * FROM watchlist")
     suspend fun getAll(): List<WatchlistItem>
 
@@ -24,6 +27,3 @@ interface WatchlistDao {
     @Query("DELETE FROM watchlist")
     suspend fun deleteAll()
 }
-
-    @Query("DELETE FROM watchlist")
-    suspend fun deleteAll()
