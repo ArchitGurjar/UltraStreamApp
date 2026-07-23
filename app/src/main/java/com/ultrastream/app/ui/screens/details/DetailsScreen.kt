@@ -1,185 +1,204 @@
 package com.ultrastream.app.ui.screens.details
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
-import com.ultrastream.app.data.models.StreamItem
-import com.ultrastream.app.ui.components.bottomsheets.SeasonsSheet
-import com.ultrastream.app.ui.components.bottomsheets.StreamsSheet
+import android.os.Bundle
+import android.view.View
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import com.bumptech.glide.Glide
+import com.google.android.material.chip.Chip
+import com.ultrastream.R
+import com.ultrastream.app.databinding.ActivityDetailsBinding
+import com.ultrastream.app.data.models.MetaItem
+import com.ultrastream.app.data.models.Video
+import com.ultrastream.app.ui.adapters.EpisodeAdapter
+import com.ultrastream.app.ui.sheets.SeasonSelectBottomSheet
+import com.ultrastream.app.ui.sheets.StreamBottomSheet
+import com.ultrastream.app.utils.NetworkUtils
+import kotlinx.coroutines.launch
 
-@Composable
-fun DetailsScreen(
-    id: String,
-    type: String,
-    viewModel: DetailsViewModel = hiltViewModel(),
-    onBack: () -> Unit,
-    onPlay: (stream: StreamItem, title: String) -> Unit
-) {
-    val uiState by viewModel.uiState.collectAsState()
-    var showSeasonsSheet by remember { mutableStateOf(false) }
-    var showStreamsSheet by remember { mutableStateOf(false) }
+class DetailsActivity : AppCompatActivity() {
 
-    LaunchedEffect(id, type) {
-        viewModel.loadMeta(id, type)
+    private lateinit var binding: ActivityDetailsBinding
+    private lateinit var metaItem: MetaItem
+    private var metaId: String = ""
+    private var metaType: String = ""
+
+    private lateinit var episodeAdapter: EpisodeAdapter
+    private var allEpisodes: List<Video> = emptyList()
+    private var currentSeason: Int = 1
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        binding = ActivityDetailsBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+
+        metaId = intent.getStringExtra("meta_id") ?: ""
+        metaType = intent.getStringExtra("meta_type") ?: "movie"
+
+        loadMetadata()
+        setupListeners()
     }
 
-    LaunchedEffect(uiState.meta) {
-        val meta = uiState.meta ?: return@LaunchedEffect
-        if (meta.type == "series" || meta.type == "anime") {
-            val seasons = meta.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: emptyList()
-            if (seasons.isNotEmpty() && uiState.selectedSeason == null) {
-                viewModel.selectSeason(seasons.first())
+    private fun loadMetadata() {
+        showLoading(true)
+        lifecycleScope.launch {
+            val app = application as com.ultrastream.app.UltraStreamApplication
+            var cached = app.repository.getCachedMeta(metaId)
+            if (cached == null) {
+                val fetched = NetworkUtils.fetchMeta(metaId, metaType)
+                if (fetched != null) {
+                    app.repository.cacheMeta(fetched)
+                    metaItem = fetched
+                } else {
+                    showLoading(false)
+                    return@launch
+                }
+            } else {
+                metaItem = cached
             }
+            showLoading(false)
+            populateUI()
         }
     }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp)
-    ) {
-        val meta = uiState.meta
-        if (meta != null) {
-            item {
-                Text(meta.name, style = MaterialTheme.typography.headlineMedium)
-                if (meta.year != null) {
-                    Text(meta.year, style = MaterialTheme.typography.bodyMedium)
-                }
-                if (meta.imdbRating != null) {
-                    Text("⭐ ${meta.imdbRating}", style = MaterialTheme.typography.bodyMedium)
-                }
-                Text(meta.description ?: "", style = MaterialTheme.typography.bodyLarge)
-                Spacer(modifier = Modifier.height(8.dp))
-                Row {
-                    Button(
-                        onClick = { viewModel.toggleLibrary(meta) },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(if (uiState.inLibrary) "Remove from Library" else "Add to Library")
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(
-                        onClick = { viewModel.toggleWatchlist(meta) },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(if (uiState.inWatchlist) "Remove from Watchlist" else "Add to Watchlist")
-                    }
-                }
-            }
+    private fun populateUI() {
+        Glide.with(this)
+            .load(metaItem.poster ?: metaItem.background)
+            .placeholder(R.drawable.placeholder_poster)
+            .into(binding.heroImage)
 
-            if (meta.type == "series" || meta.type == "anime") {
-                val seasons = meta.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: emptyList()
-                val episodes = meta.videos
-                    ?.filter { it.season == uiState.selectedSeason }
-                    ?.sortedBy { it.episode } ?: emptyList()
+        binding.tvNetwork.text = metaItem.type.uppercase()
+        binding.tvTitle.text = metaItem.name
+        binding.tvYear.text = metaItem.year?.toString() ?: ""
+        binding.tvRuntime.text = metaItem.runtime ?: "N/A"
+        binding.tvRating.text = "⭐ ${metaItem.imdbRating ?: "N/A"}"
+        binding.tvGenre.text = metaItem.genre?.take(3)?.joinToString(", ") ?: ""
 
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Season ${uiState.selectedSeason ?: ""}",
-                            style = MaterialTheme.typography.titleLarge
-                        )
-                        if (seasons.isNotEmpty()) {
-                            Button(onClick = { showSeasonsSheet = true }) {
-                                Text("Change Season")
-                            }
-                        }
-                    }
-                }
-                if (episodes.isNotEmpty()) {
-                    item {
-                        LazyVerticalGrid(
-                            columns = GridCells.Adaptive(minSize = 80.dp),
-                            modifier = Modifier.fillMaxWidth(),
-                            contentPadding = PaddingValues(4.dp)
-                        ) {
-                            items(episodes) { video ->
-                                val epNum = video.episode ?: 0
-                                val isSelected = epNum == uiState.selectedEpisode
-                                Card(
-                                    modifier = Modifier
-                                        .padding(4.dp)
-                                        .fillMaxWidth()
-                                        .height(60.dp),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = if (isSelected) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.surfaceVariant
-                                    ),
-                                    onClick = {
-                                        viewModel.selectEpisode(epNum)
-                                    }
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Text(
-                                            text = "E$epNum",
-                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary
-                                            else MaterialTheme.colorScheme.onSurface
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+        binding.tvDescription.text = metaItem.description ?: "No description available."
+        if (metaItem.description?.length ?: 0 > 200) {
+            binding.tvReadMore.visibility = View.VISIBLE
+            binding.tvReadMore.setOnClickListener {
+                binding.tvDescription.maxLines = if (binding.tvDescription.maxLines == 4) Int.MAX_VALUE else 4
+                binding.tvReadMore.text = if (binding.tvDescription.maxLines == Int.MAX_VALUE) "Read less" else "Read more"
             }
+        }
 
-            item {
-                Button(
-                    onClick = {
-                        viewModel.loadStreams(meta.id, meta.type, uiState.selectedSeason, uiState.selectedEpisode)
-                        showStreamsSheet = true
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(if (uiState.streamsLoading) "Loading..." else "Find Streams")
-                }
+        metaItem.cast?.take(8)?.forEach { actor ->
+            val chip = Chip(this).apply {
+                text = actor
+                isClickable = true
+                setOnClickListener { /* search actor */ }
             }
-        } else if (uiState.isLoading) {
-            item {
-                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
+            binding.castChipGroup.addView(chip)
+        }
+
+        if (!metaItem.imdbId.isNullOrEmpty()) {
+            binding.btnImdb.visibility = View.VISIBLE
+            binding.btnImdb.setOnClickListener { /* open IMDb */ }
+        }
+
+        val isEpisodic = !metaItem.videos.isNullOrEmpty()
+        if (isEpisodic) {
+            binding.episodesContainer.visibility = View.VISIBLE
+            binding.btnFindStreams.visibility = View.GONE
+            setupEpisodes()
+        } else {
+            binding.episodesContainer.visibility = View.GONE
+            binding.btnFindStreams.visibility = View.VISIBLE
+            binding.btnFindStreams.setOnClickListener {
+                showStreams(null)
             }
-        } else if (uiState.error != null) {
-            item {
-                Text("Error: ${uiState.error}", color = MaterialTheme.colorScheme.error)
-            }
+        }
+
+        updateWatchlistIcon()
+        updateLibraryIcon()
+    }
+
+    private fun setupEpisodes() {
+        val videos = metaItem.videos ?: emptyList()
+        allEpisodes = videos.filter { it.season > 0 && it.episode > 0 }
+            .sortedWith(compareBy<Video> { it.season }.thenBy { it.episode })
+
+        if (allEpisodes.isEmpty()) {
+            binding.episodesContainer.visibility = View.GONE
+            binding.btnFindStreams.visibility = View.VISIBLE
+            return
+        }
+
+        currentSeason = allEpisodes.firstOrNull()?.season ?: 1
+
+        episodeAdapter = EpisodeAdapter { episode ->
+            showStreams(episode)
+        }
+
+        val seasonBtn = binding.sectionMore
+        seasonBtn.visibility = View.VISIBLE
+        seasonBtn.text = "Season $currentSeason ▼"
+        seasonBtn.setOnClickListener {
+            showSeasonSelector()
+        }
+
+        renderEpisodes()
+    }
+
+    private fun renderEpisodes() {
+        val filtered = allEpisodes.filter { it.season == currentSeason }
+        episodeAdapter.submitList(filtered)
+    }
+
+    private fun showSeasonSelector() {
+        val seasons = allEpisodes.map { it.season }.distinct().sorted()
+        val bottomSheet = SeasonSelectBottomSheet(seasons, currentSeason) { selectedSeason ->
+            currentSeason = selectedSeason
+            binding.sectionMore.text = "Season $currentSeason ▼"
+            renderEpisodes()
+        }
+        bottomSheet.show(supportFragmentManager, "season_selector")
+    }
+
+    private fun showStreams(episode: Video?) {
+        val bottomSheet = StreamBottomSheet(metaId, metaType, episode)
+        bottomSheet.show(supportFragmentManager, "stream_sheet")
+    }
+
+    private fun updateWatchlistIcon() {
+        val inWatchlist = false
+        binding.btnWatchlist.setImageResource(
+            if (inWatchlist) R.drawable.ic_watchlist_filled else R.drawable.ic_watchlist
+        )
+        binding.btnWatchlist.setOnClickListener { toggleWatchlist() }
+    }
+
+    private fun toggleWatchlist() {
+        lifecycleScope.launch {
+            // Add/remove from watchlist
         }
     }
 
-    if (showSeasonsSheet) {
-        val seasons = uiState.meta?.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: emptyList()
-        SeasonsSheet(
-            seasons = seasons,
-            currentSeason = uiState.selectedSeason ?: 0,
-            onDismiss = { showSeasonsSheet = false },
-            onSeasonSelected = { season ->
-                viewModel.selectSeason(season)
-                showSeasonsSheet = false
-            }
+    private fun updateLibraryIcon() {
+        val inLibrary = false
+        binding.btnLibrary.setImageResource(
+            if (inLibrary) R.drawable.ic_bookmark_filled else R.drawable.ic_bookmark
         )
+        binding.btnLibrary.setOnClickListener { toggleLibrary() }
     }
 
-    if (showStreamsSheet && uiState.streams.isNotEmpty()) {
-        StreamsSheet(
-            streams = uiState.streams,
-            onDismiss = { showStreamsSheet = false },
-            onStreamClick = { stream ->
-                showStreamsSheet = false
-                viewModel.playStream(stream, meta?.name ?: "Stream") { resolvedStream, title ->
-                    onPlay(resolvedStream, title)
-                }
-            }
-        )
+    private fun toggleLibrary() {
+        lifecycleScope.launch {
+            // Add/remove from library
+        }
+    }
+
+    private fun showLoading(show: Boolean) {
+        binding.loadingOverlay.visibility = if (show) View.VISIBLE else View.GONE
+    }
+
+    private fun setupListeners() {
+        binding.btnBack.setOnClickListener { finish() }
+    }
+
+    companion object {
+        const val EXTRA_META_ID = "meta_id"
+        const val EXTRA_META_TYPE = "meta_type"
     }
 }
