@@ -20,4 +20,3 @@ if "data class Stream(" in content and "isLive" not in content:
 else:
     print("isLive already exists or Stream model not found.")
 PYEOF
-
