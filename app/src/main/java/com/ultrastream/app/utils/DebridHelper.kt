@@ -59,7 +59,9 @@ class DebridHelper @Inject constructor(
         return match?.groupValues?.get(1) ?: ""
     }
 
-    private fun applyDebridParams(url: String, debridKey: String): String {
+    // FIXED: Made public so StreamRepository can access it without visibility errors
+    fun applyDebridParams(url: String, debridKey: String): String {
+        if (debridKey.isBlank()) return url
         val separator = if (url.contains("?")) "&" else "?"
         return "$url${separator}realdebrid=$debridKey"
     }

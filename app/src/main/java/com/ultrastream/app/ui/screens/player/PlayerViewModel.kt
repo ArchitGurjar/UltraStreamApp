@@ -80,16 +80,16 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
                     .setUri(url)
                     .setMediaMetadata(MediaMetadata.Builder().setTitle(title).build())
 
-                // Attach external subtitles
+                // FIXED: Attach external subtitles safely using explicit MIME types and Uri.parse
                 stream.subtitles?.let { subs ->
                     val configs = subs.mapNotNull { subtitle ->
-                        val subUri = subtitle.url ?: return@mapNotNull null
+                        val subUriStr = subtitle.url ?: return@mapNotNull null
                         val mimeType = when {
-                            subUri.endsWith(".vtt") -> C.MIME_TYPE_TEXT_VTT
-                            subUri.endsWith(".srt") -> C.MIME_TYPE_TEXT_SRT
-                            else -> C.MIME_TYPE_TEXT_UNKNOWN
+                            subUriStr.endsWith(".vtt", ignoreCase = true) -> "text/vtt"
+                            subUriStr.endsWith(".srt", ignoreCase = true) -> "application/x-subrip"
+                            else -> "text/vtt"
                         }
-                        MediaItem.SubtitleConfiguration.Builder(subUri)
+                        MediaItem.SubtitleConfiguration.Builder(Uri.parse(subUriStr))
                             .setMimeType(mimeType)
                             .setLanguage(subtitle.lang ?: "und")
                             .setLabel(subtitle.name ?: subtitle.lang ?: "Subtitle")
