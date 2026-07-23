@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.ultrastream.app.ui.screens.details
 
 import androidx.compose.foundation.layout.*
@@ -27,14 +29,15 @@ fun DetailsScreen(
     var showSeasonsSheet by remember { mutableStateOf(false) }
     var showStreamsSheet by remember { mutableStateOf(false) }
 
+    val meta = uiState.meta
+
     LaunchedEffect(id, type) {
         viewModel.loadMeta(id, type)
     }
 
-    LaunchedEffect(uiState.meta) {
-        val meta = uiState.meta ?: return@LaunchedEffect
-        if (meta.type == "series" || meta.type == "anime") {
-            val seasons = meta.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: emptyList()
+    LaunchedEffect(meta) {
+        if (meta?.type == "series" || meta?.type == "anime") {
+            val seasons = meta?.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: emptyList()
             if (seasons.isNotEmpty() && uiState.selectedSeason == null) {
                 viewModel.selectSeason(seasons.first())
             }
@@ -45,7 +48,6 @@ fun DetailsScreen(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp)
     ) {
-        val meta = uiState.meta
         if (meta != null) {
             item {
                 Text(meta.name, style = MaterialTheme.typography.headlineMedium)
@@ -158,7 +160,7 @@ fun DetailsScreen(
     }
 
     if (showSeasonsSheet) {
-        val seasons = uiState.meta?.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: emptyList()
+        val seasons = meta?.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: emptyList()
         SeasonsSheet(
             seasons = seasons,
             currentSeason = uiState.selectedSeason ?: 0,
