@@ -1,10 +1,6 @@
 package com.ultrastream.app.ui.components
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -16,20 +12,29 @@ fun GridSection(
     onItemClick: (id: String, type: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 120.dp),
-        modifier = modifier,
-        contentPadding = PaddingValues(8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    Column(
+        modifier = modifier.padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(items.size) { index ->
-            val item = items[index]
-            PosterCard(
-                meta = item,
-                onClick = { onItemClick(item.id, item.type) },
-                modifier = Modifier.fillMaxWidth()
-            )
+        val chunkedItems = items.chunked(3)
+        chunkedItems.forEach { rowItems ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                rowItems.forEach { item ->
+                    PosterCard(
+                        meta = item,
+                        onClick = { onItemClick(item.id, item.type) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                // Fill empty spaces to keep consistent grid width
+                val emptySpaces = 3 - rowItems.size
+                repeat(emptySpaces) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
         }
     }
 }

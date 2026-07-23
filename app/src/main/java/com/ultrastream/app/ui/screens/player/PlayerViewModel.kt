@@ -140,7 +140,8 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
     fun skipForward(seconds: Long = 10) {
         _player.value?.let { player ->
             val newPos = player.currentPosition + seconds * 1000
-            player.seekTo(newPos.coerceAtMost(player.duration))
+            val maxPos = if (player.duration > 0) player.duration else Long.MAX_VALUE
+            player.seekTo(newPos.coerceAtMost(maxPos))
         }
     }
 

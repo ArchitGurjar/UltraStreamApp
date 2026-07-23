@@ -125,7 +125,7 @@ class HomeViewModel @Inject constructor(
                 isLoading = false,
                 continueWatching = continueWatching,
                 addons = addons,
-                catalogRows = catalogRows.toMap()
+                catalogRows = catalogRows.toSortedMap(compareBy { it })
             )
         }
     }
