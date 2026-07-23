@@ -48,10 +48,16 @@ class AddonsViewModel @Inject constructor(
     }
 
     suspend fun installAddon(rawUrl: String): Boolean {
-        // Fix for stremio:// links and trailing slashes
-        var safeUrl = rawUrl.trim().replace("stremio://", "https://")
-        if (!safeUrl.startsWith("http")) {
+        var safeUrl = rawUrl.trim()
+        if (safeUrl.startsWith("stremio://")) {
+            safeUrl = safeUrl.replace("stremio://", "https://")
+        } else if (!safeUrl.startsWith("http")) {
             safeUrl = "https://$safeUrl"
+        }
+        
+        // Remove trailing slashes if accidentally pasted
+        if (safeUrl.endsWith("/")) {
+            safeUrl = safeUrl.dropLast(1)
         }
         
         val addon = addonRepository.installAddon(safeUrl)

@@ -7,10 +7,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.launch
@@ -26,7 +28,6 @@ fun AddonsScreen(
     
     var addonUrl by remember { mutableStateOf("") }
     var debridKey by remember { mutableStateOf(uiState.debridKey) }
-    // New Import JSON Text Field State
     var jsonInputText by remember { mutableStateOf("") }
 
     LazyColumn(
@@ -38,23 +39,27 @@ fun AddonsScreen(
             Text("Addons", style = MaterialTheme.typography.headlineMedium)
         }
         
-        // Addon URL Installation
+        // 1. FIXED: Addon URL Installation Box (Strictly Single Line)
         item {
             OutlinedTextField(
                 value = addonUrl,
                 onValueChange = { addonUrl = it },
                 label = { Text("Manifest URL (https:// or stremio://)") },
-                modifier = Modifier.fillMaxWidth()
+                singleLine = true,
+                maxLines = 1,
+                modifier = Modifier.fillMaxWidth().height(64.dp)
             )
+            Spacer(modifier = Modifier.height(8.dp))
             Button(
                 onClick = {
+                    if (addonUrl.isBlank()) return@Button
                     scope.launch {
                         val success = viewModel.installAddon(addonUrl)
                         if (success) {
                             addonUrl = ""
                             Toast.makeText(context, "✅ Addon Installed!", Toast.LENGTH_SHORT).show()
                         } else {
-                            Toast.makeText(context, "❌ Install Failed: Check URL format.", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, "❌ Install Failed: Server blocked or invalid format.", Toast.LENGTH_LONG).show()
                         }
                     }
                 },
@@ -64,22 +69,21 @@ fun AddonsScreen(
             }
         }
 
-        // Import & Export exact Stremio JSON Array
+        // 2. Import & Export JSON Array
         item {
             Text("Sync / Backup", style = MaterialTheme.typography.titleMedium)
             
-            // JSON Input Field (Expands dynamically to fit text)
             OutlinedTextField(
                 value = jsonInputText,
                 onValueChange = { jsonInputText = it },
                 label = { Text("Paste Import JSON here") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .wrapContentHeight(),
+                modifier = Modifier.fillMaxWidth().height(120.dp),
                 minLines = 3,
-                maxLines = 15
+                maxLines = 5
             )
             
+            Spacer(modifier = Modifier.height(8.dp))
+
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 Button(
                     onClick = {
@@ -95,9 +99,8 @@ fun AddonsScreen(
                 }
                 Button(
                     onClick = {
-                        // STRICT: Only read from the TextField state, NO Clipboard fallback
                         if (jsonInputText.isBlank()) {
-                            Toast.makeText(context, "Import JSON field is empty!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Paste JSON code first!", Toast.LENGTH_SHORT).show()
                             return@Button
                         }
                         scope.launch {
@@ -117,15 +120,18 @@ fun AddonsScreen(
             }
         }
 
-        // Debrid Settings
+        // 3. Debrid Settings
         item {
             Text("Real-Debrid Key", style = MaterialTheme.typography.titleMedium)
             OutlinedTextField(
                 value = debridKey,
                 onValueChange = { debridKey = it },
                 label = { Text("Debrid API Key") },
+                singleLine = true,
+                maxLines = 1,
                 modifier = Modifier.fillMaxWidth()
             )
+            Spacer(modifier = Modifier.height(8.dp))
             Button(
                 onClick = {
                     scope.launch {
@@ -139,7 +145,7 @@ fun AddonsScreen(
             }
         }
 
-        // Installed Addons List
+        // 4. Installed Addons List
         item {
             Text("Installed Addons (${uiState.addons.size})", style = MaterialTheme.typography.titleMedium)
         }
@@ -151,29 +157,25 @@ fun AddonsScreen(
             ) {
                 Row(
                     modifier = Modifier.padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                         Text(addon.name, style = MaterialTheme.typography.titleSmall)
-                        Text(addon.url, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                        Text(
+                            text = addon.url, 
+                            style = MaterialTheme.typography.bodySmall, 
+                            maxLines = 1, 
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
-                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Switch(
                             checked = addon.enabled,
-                            onCheckedChange = {
-                                scope.launch {
-                                    viewModel.toggleAddon(addon.id, it)
-                                }
-                            }
+                            onCheckedChange = { scope.launch { viewModel.toggleAddon(addon.id, it) } }
                         )
                         if (!addon.required) {
-                            IconButton(
-                                onClick = {
-                                    scope.launch {
-                                        viewModel.removeAddon(addon.id)
-                                    }
-                                }
-                            ) {
+                            IconButton(onClick = { scope.launch { viewModel.removeAddon(addon.id) } }) {
                                 Icon(imageVector = Icons.Default.Delete, contentDescription = "Remove")
                             }
                         }
