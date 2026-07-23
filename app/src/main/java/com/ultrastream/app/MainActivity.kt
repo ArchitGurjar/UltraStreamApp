@@ -26,6 +26,7 @@ import com.ultrastream.app.ui.screens.addons.AddonsScreen
 import com.ultrastream.app.ui.screens.details.DetailsScreen
 import com.ultrastream.app.ui.screens.home.HomeScreen
 import com.ultrastream.app.ui.screens.library.LibraryScreen
+import com.ultrastream.app.ui.screens.player.PlayerScreen
 import com.ultrastream.app.ui.screens.profile.ProfileScreen
 import com.ultrastream.app.ui.screens.search.SearchScreen
 import com.ultrastream.app.ui.theme.UltraStreamTheme
@@ -110,15 +111,13 @@ fun UltraStreamNavHost() {
                     type = type,
                     onBack = { navController.popBackStack() },
                     onPlay = { url, title ->
-                        // Navigate to player
                         navController.navigate(Screen.Player.pass(url))
                     }
                 )
             }
             composable(Screen.Player.route) { backStackEntry ->
                 val url = backStackEntry.arguments?.getString("url") ?: ""
-                // Player screen will be added in Part 6
-                Text("Player for $url")
+                PlayerScreen(url = url, title = "Now Playing")
             }
         }
     }
