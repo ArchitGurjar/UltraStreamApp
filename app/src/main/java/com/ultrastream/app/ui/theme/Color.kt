@@ -2,15 +2,7 @@ package com.ultrastream.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val Purple80 = Color(0xFFD0BCFF)
-val PurpleGrey80 = Color(0xFFCCC2DC)
-val Pink80 = Color(0xFFEFB8C8)
-
-val Purple40 = Color(0xFF6650a4)
-val PurpleGrey40 = Color(0xFF625b71)
-val Pink40 = Color(0xFF7D5260)
-
-// UltraStream custom colors (matching web CSS variables)
+// Dark theme colors (matching web CSS variables)
 val BackgroundDark = Color(0xFF060606)
 val SurfaceDark = Color(0xFF121212)
 val CardDark = Color(0xFF1A1A1A)
@@ -21,9 +13,21 @@ val AccentGold = Color(0xFFFBBF24)
 val AccentRed = Color(0xFFEF4444)
 val AccentGreen = Color(0xFF4CAF50)
 val AccentPurple = Color(0xFFA78BFA)
+val AccentPink = Color(0xFFF472B6)
+val AccentOrange = Color(0xFFFB923C)
 
+// Light theme colors
 val BackgroundLight = Color(0xFFF3F4F6)
 val SurfaceLight = Color(0xFFFFFFFF)
 val CardLight = Color(0xFFFFFFFF)
 val TextMainLight = Color(0xFF111827)
 val TextMutedLight = Color(0xFF6B7280)
+
+// Default Material colors
+val Purple80 = Color(0xFFD0BCFF)
+val PurpleGrey80 = Color(0xFFCCC2DC)
+val Pink80 = Color(0xFFEFB8C8)
+
+val Purple40 = Color(0xFF6650a4)
+val PurpleGrey40 = Color(0xFF625b71)
+val Pink40 = Color(0xFF7D5260)
