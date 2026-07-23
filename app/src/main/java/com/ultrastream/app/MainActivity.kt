@@ -115,7 +115,7 @@ class MainActivity : ComponentActivity() {
                         id = id,
                         type = type,
                         onBack = { navController.popBackStack() },
-                        onPlay = { stream, title ->
+                        onPlay = { stream: StreamItem, title: String ->
                             val json = moshi.adapter(StreamItem::class.java).toJson(stream)
                             navController.navigate(Screen.Player.pass(json, title))
                         }

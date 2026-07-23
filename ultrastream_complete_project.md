@@ -1,5 +1,5 @@
 # UltraStream Complete Project Export
-Generated on: Thu Jul 23 22:28:08 IST 2026
+Generated on: Thu Jul 23 22:31:18 IST 2026
 
 ### File: `./app/src/main/java/com/ultrastream/app/di/DatabaseModule.kt`
 ```
@@ -560,17 +560,22 @@ import android.app.Activity
 import android.media.AudioManager
 import android.os.Build
 import android.view.ViewGroup
-import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Forward
+import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -583,17 +588,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.media3.ui.PlayerView
-import androidx.compose.ui.graphics.Color
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Replay
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Forward
-import androidx.compose.material.icons.filled.Fullscreen
 import com.ultrastream.app.data.models.StreamItem
-import com.ultrastream.app.ui.theme.LocalCustomColors
-import kotlinx.coroutines.delay
 
 @Composable
 fun PlayerScreen(
@@ -605,9 +600,7 @@ fun PlayerScreen(
     val context = LocalContext.current
     val view = LocalView.current
     val activity = context as? Activity
-    val customColors = LocalCustomColors.current
 
-    // Immersive mode
     DisposableEffect(Unit) {
         val window = activity?.window
         val insetsController = window?.let { WindowInsetsControllerCompat(it, view) }
@@ -639,7 +632,6 @@ fun PlayerScreen(
         }
     }
 
-    // Brightness
     LaunchedEffect(brightness) {
         activity?.window?.let { window ->
             val layoutParams = window.attributes
@@ -648,7 +640,6 @@ fun PlayerScreen(
         }
     }
 
-    // Volume
     LaunchedEffect(volume) {
         val audioManager = context.getSystemService(AudioManager::class.java)
         val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
@@ -656,7 +647,6 @@ fun PlayerScreen(
         audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0)
     }
 
-    // Lifecycle handling for PiP and background
     DisposableEffect(Unit) {
         val listener = LifecycleEventObserver { _, event ->
             when (event) {
@@ -681,9 +671,8 @@ fun PlayerScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(androidx.compose.ui.graphics.Color.Black)
+            .background(Color.Black)
     ) {
-        // PlayerView
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
@@ -701,20 +690,18 @@ fun PlayerScreen(
             }
         )
 
-        // Custom controls overlay
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            // Top bar
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
                     text = if (playerTitle.isNotEmpty()) playerTitle else title,
-                    color = androidx.compose.ui.graphics.Color.White,
+                    color = Color.White,
                     style = MaterialTheme.typography.titleMedium
                 )
                 Row {
@@ -722,14 +709,14 @@ fun PlayerScreen(
                         Icon(
                             imageVector = Icons.Default.PictureInPicture,
                             contentDescription = "Picture in Picture",
-                            tint = androidx.compose.ui.graphics.Color.White
+                            tint = Color.White
                         )
                     }
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = "Close",
-                            tint = androidx.compose.ui.graphics.Color.White
+                            tint = Color.White
                         )
                     }
                 }
@@ -737,7 +724,6 @@ fun PlayerScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // Progress
             val progress = if (duration > 0) (currentPosition.toFloat() / duration.toFloat()) else 0f
             LinearProgressIndicator(
                 progress = progress,
@@ -745,7 +731,7 @@ fun PlayerScreen(
                     .fillMaxWidth()
                     .height(6.dp),
                 color = MaterialTheme.colorScheme.primary,
-                trackColor = androidx.compose.ui.graphics.Color.Gray.copy(alpha = 0.3f)
+                trackColor = Color.Gray.copy(alpha = 0.3f)
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -753,40 +739,38 @@ fun PlayerScreen(
             ) {
                 Text(
                     text = formatTime(currentPosition),
-                    color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.7f),
+                    color = Color.White.copy(alpha = 0.7f),
                     style = MaterialTheme.typography.labelSmall
                 )
                 Text(
                     text = formatTime(duration),
-                    color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.7f),
+                    color = Color.White.copy(alpha = 0.7f),
                     style = MaterialTheme.typography.labelSmall
                 )
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Bottom controls
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 IconButton(onClick = { viewModel.skipBackward() }) {
-                    Icon(Icons.Default.Replay, contentDescription = "Back 10s", tint = androidx.compose.ui.graphics.Color.White)
+                    Icon(Icons.Default.Replay, contentDescription = "Back 10s", tint = Color.White)
                 }
                 IconButton(onClick = { viewModel.playPause() }) {
                     Icon(
                         if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = "Play/Pause",
-                        tint = androidx.compose.ui.graphics.Color.White
+                        tint = Color.White
                     )
                 }
                 IconButton(onClick = { viewModel.skipForward() }) {
-                    Icon(Icons.Default.Forward, contentDescription = "Forward 10s", tint = androidx.compose.ui.graphics.Color.White)
+                    Icon(Icons.Default.Forward, contentDescription = "Forward 10s", tint = Color.White)
                 }
             }
         }
 
-        // Gesture overlay
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -1005,6 +989,195 @@ fun ProfileScreen(
             }
         }
     }
+}
+```
+
+### File: `./app/src/main/java/com/ultrastream/app/ui/screens/profile/ProfileViewModel.kt`
+```
+package com.ultrastream.app.ui.screens.profile
+
+import android.content.ContentValues
+import android.content.Context
+import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import com.ultrastream.app.data.dao.*
+import com.ultrastream.app.data.preferences.PreferencesManager
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import javax.inject.Inject
+import java.io.File
+import java.io.FileOutputStream
+import java.io.InputStream
+
+@HiltViewModel
+class ProfileViewModel @Inject constructor(
+    private val preferencesManager: PreferencesManager,
+    private val libraryDao: LibraryDao,
+    private val watchlistDao: WatchlistDao,
+    private val historyDao: HistoryDao,
+    private val watchProgressDao: WatchProgressDao,
+    private val addonDao: AddonDao,
+    private val profileDao: ProfileDao
+) : ViewModel() {
+
+    private val _uiState = MutableStateFlow(ProfileUiState())
+    val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            preferencesManager.getTheme().collect { theme ->
+                _uiState.value = _uiState.value.copy(theme = theme)
+            }
+        }
+        viewModelScope.launch {
+            preferencesManager.getHindiPriority().collect { enabled ->
+                _uiState.value = _uiState.value.copy(hindiPriority = enabled)
+            }
+        }
+        viewModelScope.launch {
+            preferencesManager.getAutoPlayNext().collect { enabled ->
+                _uiState.value = _uiState.value.copy(autoPlayNext = enabled)
+            }
+        }
+        viewModelScope.launch {
+            preferencesManager.getParentalControl().collect { enabled ->
+                _uiState.value = _uiState.value.copy(parentalControl = enabled)
+            }
+        }
+        viewModelScope.launch {
+            preferencesManager.getCurrentProfile().collect { profile ->
+                _uiState.value = _uiState.value.copy(currentProfile = profile)
+            }
+        }
+    }
+
+    suspend fun toggleTheme() {
+        val current = uiState.value.theme
+        val newTheme = if (current == "dark") "light" else "dark"
+        preferencesManager.setTheme(newTheme)
+        _uiState.value = _uiState.value.copy(theme = newTheme)
+    }
+
+    suspend fun toggleHindiPriority() {
+        val new = !uiState.value.hindiPriority
+        preferencesManager.setHindiPriority(new)
+        _uiState.value = _uiState.value.copy(hindiPriority = new)
+    }
+
+    suspend fun toggleAutoPlayNext() {
+        val new = !uiState.value.autoPlayNext
+        preferencesManager.setAutoPlayNext(new)
+        _uiState.value = _uiState.value.copy(autoPlayNext = new)
+    }
+
+    suspend fun toggleParentalControl() {
+        val new = !uiState.value.parentalControl
+        preferencesManager.setParentalControl(new)
+        _uiState.value = _uiState.value.copy(parentalControl = new)
+    }
+
+    suspend fun exportData(context: Context): Boolean {
+        return try {
+            val data = buildExportData()
+            val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+            val json = moshi.adapter(ExportData::class.java).toJson(data)
+            val fileName = "ultrastream_backup_${System.currentTimeMillis()}.json"
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val resolver = context.contentResolver
+                val contentValues = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "application/json")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, "Documents/UltraStream")
+                }
+                val uri = resolver.insert(MediaStore.Files.getContentUri("external"), contentValues)
+                uri?.let {
+                    resolver.openOutputStream(it)?.use { outputStream ->
+                        outputStream.write(json.toByteArray())
+                    }
+                    true
+                } ?: false
+            } else {
+                val file = File(context.getExternalFilesDir("backups"), fileName)
+                file.parentFile?.mkdirs()
+                file.writeText(json)
+                true
+            }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    suspend fun importData(context: Context, uri: Uri): Boolean {
+        return try {
+            val inputStream: InputStream = context.contentResolver.openInputStream(uri) ?: return false
+            val json = inputStream.bufferedReader().use { it.readText() }
+            val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+            val data = moshi.adapter(ExportData::class.java).fromJson(json) ?: return false
+            libraryDao.deleteAll()
+            watchlistDao.deleteAll()
+            historyDao.deleteAll()
+            watchProgressDao.deleteAll()
+            addonDao.deleteAll()
+            profileDao.deleteAll()
+            libraryDao.insertAll(data.library)
+            watchlistDao.insertAll(data.watchlist)
+            historyDao.insertAll(data.history)
+            watchProgressDao.insertAll(data.watchProgress)
+            addonDao.insertAll(data.addons)
+            profileDao.insertAll(data.profiles)
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    suspend fun factoryReset(context: Context) {
+        libraryDao.deleteAll()
+        watchlistDao.deleteAll()
+        historyDao.deleteAll()
+        watchProgressDao.deleteAll()
+        addonDao.deleteAll()
+        profileDao.deleteAll()
+        preferencesManager.clearAll()
+        _uiState.value = ProfileUiState()
+    }
+
+    private suspend fun buildExportData(): ExportData {
+        return ExportData(
+            library = libraryDao.getAll(),
+            watchlist = watchlistDao.getAll(),
+            history = historyDao.getAll(),
+            watchProgress = watchProgressDao.getAll(),
+            addons = addonDao.getAll(),
+            profiles = profileDao.getAll()
+        )
+    }
+
+    data class ProfileUiState(
+        val theme: String = "dark",
+        val hindiPriority: Boolean = true,
+        val autoPlayNext: Boolean = false,
+        val parentalControl: Boolean = false,
+        val currentProfile: String = "default"
+    )
+
+    data class ExportData(
+        val library: List<com.ultrastream.app.data.models.LibraryItem>,
+        val watchlist: List<com.ultrastream.app.data.models.WatchlistItem>,
+        val history: List<com.ultrastream.app.data.models.HistoryItem>,
+        val watchProgress: List<com.ultrastream.app.data.models.WatchProgress>,
+        val addons: List<com.ultrastream.app.data.models.Addon>,
+        val profiles: List<com.ultrastream.app.data.models.Profile>
+    )
 }
 ```
 
@@ -1882,8 +2055,9 @@ sealed class Screen(val route: String) {
         fun pass(id: String, type: String) =
             "details/${URLEncoder.encode(id, "UTF-8")}/${URLEncoder.encode(type, "UTF-8")}"
     }
-    object Player : Screen("player/{url}") {
-        fun pass(url: String) = "player/${URLEncoder.encode(url, "UTF-8")}"
+    object Player : Screen("player/{streamJson}/{title}") {
+        fun pass(streamJson: String, title: String) =
+            "player/${URLEncoder.encode(streamJson, "UTF-8")}/${URLEncoder.encode(title, "UTF-8")}"
     }
 }
 ```
@@ -2763,7 +2937,8 @@ data class Stream(
     val name: String?,
     val description: String?,
     val infoHash: String?,
-    val subtitles: List<StreamSubtitle>?
+    val subtitles: List<StreamSubtitle>?,
+    val isLive: Boolean = false
 )
 
 data class StreamSubtitle(
