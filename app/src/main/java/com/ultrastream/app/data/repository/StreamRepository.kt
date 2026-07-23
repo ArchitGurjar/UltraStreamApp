@@ -38,7 +38,6 @@ class StreamRepository @Inject constructor(
             val deferred = addonUrls.map { url ->
                 async {
                     try {
-                        // Build base URL
                         var baseUrl = url
                         if (baseUrl.endsWith("/manifest.json")) {
                             baseUrl = baseUrl.substring(0, baseUrl.length - "/manifest.json".length)
@@ -54,7 +53,7 @@ class StreamRepository @Inject constructor(
                         } else {
                             "$baseUrl/stream/$metaType/$metaId.json"
                         }
-                        val finalUrl = debridHelper.applyDebrid(fullUrl, debridKey)
+                        val finalUrl = debridHelper.applyDebridParams(fullUrl, debridKey ?: "")
                         val response = stremioApi.getStreams(finalUrl)
                         response.streams?.mapNotNull { stream ->
                             val addonName = extractAddonName(url)
@@ -75,6 +74,11 @@ class StreamRepository @Inject constructor(
             val all = results.flatten()
             streamParser.sortStreams(all, hindiPriority)
         }
+    }
+
+    suspend fun resolveStream(stream: StreamItem, debridKey: String?): StreamItem {
+        val resolvedUrl = debridHelper.resolveStreamUrl(stream.url ?: "", debridKey)
+        return stream.copy(url = resolvedUrl)
     }
 
     private fun convertStream(stream: Stream, addonName: String): StreamItem {

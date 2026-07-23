@@ -11,6 +11,7 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import com.ultrastream.app.network.StremioApi
+import com.ultrastream.app.network.RealDebridApi
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
@@ -34,6 +35,15 @@ object NetworkModule {
         }
         return OkHttpClient.Builder()
             .addInterceptor(loggingInterceptor)
+            .addInterceptor { chain ->
+                val original = chain.request()
+                val request = original.newBuilder()
+                    .header("User-Agent", "UltraStream/1.0 (Android)")
+                    .header("Referer", "https://ultrastream.app/")
+                    .method(original.method, original.body)
+                    .build()
+                chain.proceed(request)
+            }
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
@@ -44,7 +54,7 @@ object NetworkModule {
     @Singleton
     fun provideRetrofit(okHttpClient: OkHttpClient, moshi: Moshi): Retrofit {
         return Retrofit.Builder()
-            .baseUrl("https://dummy.base.url/") // Will be overridden by full URLs
+            .baseUrl("https://dummy.base.url/")
             .client(okHttpClient)
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
@@ -54,5 +64,14 @@ object NetworkModule {
     @Singleton
     fun provideStremioApi(retrofit: Retrofit): StremioApi {
         return retrofit.create(StremioApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideRealDebridApi(retrofit: Retrofit): RealDebridApi {
+        return retrofit.newBuilder()
+            .baseUrl("https://api.real-debrid.com/rest/1.0/")
+            .build()
+            .create(RealDebridApi::class.java)
     }
 }

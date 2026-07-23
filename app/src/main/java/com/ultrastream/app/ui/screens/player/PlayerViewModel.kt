@@ -1,17 +1,23 @@
 package com.ultrastream.app.ui.screens.player
 
 import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.dash.DashMediaSource
+import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.MediaSource
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import com.ultrastream.app.data.models.StreamItem
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -55,16 +61,48 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
     private var playerListener: Player.Listener? = null
     private var positionJob: Job? = null
 
-    fun initializePlayer(context: Context, url: String, title: String) {
+    fun initializePlayer(context: Context, stream: StreamItem, title: String) {
         viewModelScope.launch {
             try {
+                val url = stream.url ?: stream.streamUrl ?: stream.externalUrl
+                if (url.isNullOrBlank()) {
+                    _error.value = "No valid stream URL"
+                    return@launch
+                }
+
                 val trackSelector = DefaultTrackSelector(context)
                 val exoPlayer = ExoPlayer.Builder(context)
                     .setTrackSelector(trackSelector)
                     .build()
 
-                val dataSourceFactory = DefaultHttpDataSource.Factory()
-                val mediaSource = createMediaSource(url, dataSourceFactory)
+                val dataSourceFactory = createDataSourceFactory()
+                val mediaItemBuilder = MediaItem.Builder()
+                    .setUri(url)
+                    .setMediaMetadata(MediaMetadata.Builder().setTitle(title).build())
+
+                // Attach external subtitles
+                stream.subtitles?.let { subs ->
+                    val configs = subs.mapNotNull { subtitle ->
+                        val subUri = subtitle.url ?: return@mapNotNull null
+                        val mimeType = when {
+                            subUri.endsWith(".vtt") -> C.MIME_TYPE_TEXT_VTT
+                            subUri.endsWith(".srt") -> C.MIME_TYPE_TEXT_SRT
+                            else -> C.MIME_TYPE_TEXT_UNKNOWN
+                        }
+                        MediaItem.SubtitleConfiguration.Builder(subUri)
+                            .setMimeType(mimeType)
+                            .setLanguage(subtitle.lang ?: "und")
+                            .setLabel(subtitle.name ?: subtitle.lang ?: "Subtitle")
+                            .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                            .build()
+                    }
+                    if (configs.isNotEmpty()) {
+                        mediaItemBuilder.setSubtitleConfigurations(configs)
+                    }
+                }
+
+                val mediaItem = mediaItemBuilder.build()
+                val mediaSource = createMediaSource(mediaItem, dataSourceFactory)
                 exoPlayer.setMediaSource(mediaSource)
                 exoPlayer.prepare()
                 exoPlayer.playWhenReady = true
@@ -115,13 +153,21 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
         }
     }
 
-    private fun createMediaSource(url: String, dataSourceFactory: DefaultHttpDataSource.Factory): MediaSource {
-        val uri = android.net.Uri.parse(url)
+    private fun createDataSourceFactory(): DataSource.Factory {
+        return DefaultHttpDataSource.Factory()
+            .setUserAgent("UltraStream/1.0 (Android)")
+            .setDefaultRequestProperties(mapOf("Referer" to "https://ultrastream.app/"))
+            .setConnectTimeoutMs(30_000)
+            .setReadTimeoutMs(60_000)
+    }
+
+    private fun createMediaSource(mediaItem: MediaItem, dataSourceFactory: DataSource.Factory): MediaSource {
+        val uri = mediaItem.localConfiguration?.uri ?: Uri.EMPTY
+        val url = uri.toString()
         return when {
-            url.contains(".m3u8") -> HlsMediaSource.Factory(dataSourceFactory).createMediaSource(MediaItem.fromUri(uri))
-            url.contains(".mpd") -> DashMediaSource.Factory(dataSourceFactory).createMediaSource(MediaItem.fromUri(uri))
-            else -> androidx.media3.exoplayer.source.ProgressiveMediaSource.Factory(dataSourceFactory)
-                .createMediaSource(MediaItem.fromUri(uri))
+            url.contains(".m3u8") -> HlsMediaSource.Factory(dataSourceFactory).createMediaSource(mediaItem)
+            url.contains(".mpd") -> DashMediaSource.Factory(dataSourceFactory).createMediaSource(mediaItem)
+            else -> ProgressiveMediaSource.Factory(dataSourceFactory).createMediaSource(mediaItem)
         }
     }
 
@@ -137,11 +183,20 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
         }
     }
 
+    fun play() {
+        _player.value?.play()
+        _isPlaying.value = true
+    }
+
+    fun pause() {
+        _player.value?.pause()
+        _isPlaying.value = false
+    }
+
     fun skipForward(seconds: Long = 10) {
         _player.value?.let { player ->
             val newPos = player.currentPosition + seconds * 1000
-            val maxPos = if (player.duration > 0) player.duration else Long.MAX_VALUE
-            player.seekTo(newPos.coerceAtMost(maxPos))
+            player.seekTo(newPos.coerceAtMost(player.duration))
         }
     }
 

@@ -12,7 +12,8 @@ sealed class Screen(val route: String) {
         fun pass(id: String, type: String) =
             "details/${URLEncoder.encode(id, "UTF-8")}/${URLEncoder.encode(type, "UTF-8")}"
     }
-    object Player : Screen("player/{url}") {
-        fun pass(url: String) = "player/${URLEncoder.encode(url, "UTF-8")}"
+    object Player : Screen("player/{streamJson}/{title}") {
+        fun pass(streamJson: String, title: String) =
+            "player/${URLEncoder.encode(streamJson, "UTF-8")}/${URLEncoder.encode(title, "UTF-8")}"
     }
 }

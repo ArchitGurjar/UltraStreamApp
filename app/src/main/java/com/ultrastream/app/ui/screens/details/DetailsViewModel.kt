@@ -2,19 +2,12 @@ package com.ultrastream.app.ui.screens.details
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ultrastream.app.data.models.LibraryItem
-import com.ultrastream.app.data.models.MetaItem
-import com.ultrastream.app.data.models.StreamItem
-import com.ultrastream.app.data.models.WatchlistItem
-import com.ultrastream.app.data.models.WatchProgress
+import com.ultrastream.app.data.dao.*
+import com.ultrastream.app.data.models.*
 import com.ultrastream.app.data.preferences.PreferencesManager
 import com.ultrastream.app.data.repository.AddonRepository
 import com.ultrastream.app.data.repository.MetaRepository
 import com.ultrastream.app.data.repository.StreamRepository
-import com.ultrastream.app.data.dao.LibraryDao
-import com.ultrastream.app.data.dao.WatchProgressDao
-import com.ultrastream.app.data.dao.WatchedEpisodeDao
-import com.ultrastream.app.data.dao.WatchlistDao
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,12 +31,14 @@ class DetailsViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(DetailsUiState())
     val uiState: StateFlow<DetailsUiState> = _uiState.asStateFlow()
 
+    private var currentSeason: Int? = null
+    private var currentEpisode: Int? = null
+
     fun loadMeta(id: String, type: String) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             val meta = metaRepository.getMeta(id, type)
             if (meta != null) {
-                // Check if in library/watchlist
                 val inLibrary = libraryDao.getById(id) != null
                 val inWatchlist = watchlistDao.getById(id) != null
                 val progress = watchProgressDao.getById(id)
@@ -59,6 +54,57 @@ class DetailsViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     error = "Meta not found"
+                )
+            }
+        }
+    }
+
+    fun selectSeason(season: Int) {
+        currentSeason = season
+        currentEpisode = null
+        _uiState.value = _uiState.value.copy(selectedSeason = season, selectedEpisode = null)
+        loadStreamsForCurrentSelection()
+    }
+
+    fun selectEpisode(episode: Int) {
+        currentEpisode = episode
+        _uiState.value = _uiState.value.copy(selectedEpisode = episode)
+        loadStreamsForCurrentSelection()
+    }
+
+    private fun loadStreamsForCurrentSelection() {
+        val meta = _uiState.value.meta ?: return
+        loadStreams(meta.id, meta.type, currentSeason, currentEpisode)
+    }
+
+    fun loadStreams(id: String, type: String, season: Int? = null, episode: Int? = null) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(streamsLoading = true, streams = emptyList())
+            try {
+                val addons = addonRepository.getEnabledAddons()
+                val addonUrls = addons.map { it.url }
+                val hindiPriority = preferencesManager.getHindiPriority().first()
+                val debridKey = preferencesManager.getDebridKey().first()
+
+                val streams = streamRepository.getStreams(
+                    metaId = id,
+                    metaType = type,
+                    season = season,
+                    episode = episode,
+                    addonUrls = addonUrls,
+                    hindiPriority = hindiPriority,
+                    debridKey = if (debridKey.isNotBlank()) debridKey else null
+                )
+
+                _uiState.value = _uiState.value.copy(
+                    streams = streams,
+                    streamsLoading = false
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    streams = emptyList(),
+                    streamsLoading = false,
+                    error = e.message ?: "Failed to load streams"
                 )
             }
         }
@@ -90,41 +136,11 @@ class DetailsViewModel @Inject constructor(
         }
     }
 
-    fun loadStreams(id: String, type: String, season: Int? = null, episode: Int? = null) {
+    fun playStream(stream: StreamItem, title: String, onResolved: (StreamItem, String) -> Unit) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(streamsLoading = true, streams = emptyList())
-
-            try {
-                // Fetch installed addon URLs (only enabled ones)
-                val addons = addonRepository.getEnabledAddons()
-                val addonUrls = addons.map { it.url }
-
-                // Get preferences
-                val hindiPriority = preferencesManager.getHindiPriority().first()
-                val debridKey = preferencesManager.getDebridKey().first()
-
-                // Fetch streams
-                val streams = streamRepository.getStreams(
-                    metaId = id,
-                    metaType = type,
-                    season = season,
-                    episode = episode,
-                    addonUrls = addonUrls,
-                    hindiPriority = hindiPriority,
-                    debridKey = if (debridKey.isNotBlank()) debridKey else null
-                )
-
-                _uiState.value = _uiState.value.copy(
-                    streams = streams,
-                    streamsLoading = false
-                )
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    streams = emptyList(),
-                    streamsLoading = false,
-                    error = e.message ?: "Failed to load streams"
-                )
-            }
+            val debridKey = preferencesManager.getDebridKey().first()
+            val resolved = streamRepository.resolveStream(stream, debridKey.takeIf { it.isNotBlank() })
+            onResolved(resolved, title)
         }
     }
 
@@ -136,11 +152,12 @@ class DetailsViewModel @Inject constructor(
         val watchProgress: WatchProgress? = null,
         val error: String? = null,
         val streams: List<StreamItem> = emptyList(),
-        val streamsLoading: Boolean = false
+        val streamsLoading: Boolean = false,
+        val selectedSeason: Int? = null,
+        val selectedEpisode: Int? = null
     )
 }
 
-// Extension functions to convert MetaItem to LibraryItem/WatchlistItem
 fun MetaItem.toLibraryItem() = LibraryItem(
     id = id,
     type = type,
