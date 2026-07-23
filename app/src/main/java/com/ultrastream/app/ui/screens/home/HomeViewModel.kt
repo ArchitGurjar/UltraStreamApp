@@ -50,7 +50,7 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
 
-            // 1. Continue watching
+            // 1. Continue Watching
             val historyItems = historyDao.getAll().take(10)
             val continueWatching = historyItems.mapNotNull { history ->
                 val progress = watchProgressDao.getById(history.id)
@@ -70,7 +70,19 @@ class HomeViewModel @Inject constructor(
             for (addon in addons) {
                 try {
                     val catalogs = catalogAdapter.fromJson(addon.catalogs) ?: emptyList()
-                    val baseUrl = addon.url.replace("/manifest.json", "")
+                    // Build base URL: remove trailing /manifest.json if present, else just use URL as-is
+                    var baseUrl = addon.url
+                    if (baseUrl.endsWith("/manifest.json")) {
+                        baseUrl = baseUrl.substring(0, baseUrl.length - "/manifest.json".length)
+                    } else if (baseUrl.endsWith("manifest.json")) {
+                        // handle no leading slash
+                        baseUrl = baseUrl.substring(0, baseUrl.length - "manifest.json".length)
+                    }
+                    // Remove trailing slash if any
+                    if (baseUrl.endsWith("/")) {
+                        baseUrl = baseUrl.substring(0, baseUrl.length - 1)
+                    }
+
                     for (cat in catalogs) {
                         val rowId = "${addon.id}_${cat.type}_${cat.id}"
                         fetchJobs.add(
@@ -111,7 +123,7 @@ class HomeViewModel @Inject constructor(
                                     } ?: emptyList()
                                     catalogRows[rowId] = items.take(20) // limit to 20 per row
                                 } catch (e: Exception) {
-                                    // skip this catalog
+                                    // skip this catalog, log if needed
                                 }
                             }
                         )

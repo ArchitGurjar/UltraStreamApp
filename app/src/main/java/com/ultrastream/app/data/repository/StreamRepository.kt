@@ -1,6 +1,5 @@
 package com.ultrastream.app.data.repository
 
-import com.ultrastream.app.data.models.MetaItem
 import com.ultrastream.app.data.models.StreamItem
 import com.ultrastream.app.data.models.Subtitle
 import com.ultrastream.app.network.StremioApi
@@ -39,11 +38,22 @@ class StreamRepository @Inject constructor(
             val deferred = addonUrls.map { url ->
                 async {
                     try {
-                        val base = url.replace("/manifest.json", "")
+                        // Build base URL: remove trailing /manifest.json if present
+                        var baseUrl = url
+                        if (baseUrl.endsWith("/manifest.json")) {
+                            baseUrl = baseUrl.substring(0, baseUrl.length - "/manifest.json".length)
+                        } else if (baseUrl.endsWith("manifest.json")) {
+                            baseUrl = baseUrl.substring(0, baseUrl.length - "manifest.json".length)
+                        }
+                        // Remove trailing slash if any
+                        if (baseUrl.endsWith("/")) {
+                            baseUrl = baseUrl.substring(0, baseUrl.length - 1)
+                        }
+
                         val fullUrl = if (season != null && episode != null) {
-                            "$base/stream/$metaType/$metaId:$season:$episode.json"
+                            "$baseUrl/stream/$metaType/$idWithExtra.json"
                         } else {
-                            "$base/stream/$metaType/$metaId.json"
+                            "$baseUrl/stream/$metaType/$metaId.json"
                         }
                         // Apply debrid if present
                         val finalUrl = debridHelper.applyDebrid(fullUrl, debridKey)
@@ -95,6 +105,7 @@ class StreamRepository @Inject constructor(
 
     private fun extractAddonName(url: String): String {
         // Simple extraction from URL
-        return url.split("/").getOrElse(2) { "addon" }.replace("manifest.json", "")
+        val parts = url.split("/")
+        return parts.getOrElse(2) { "addon" }
     }
 }

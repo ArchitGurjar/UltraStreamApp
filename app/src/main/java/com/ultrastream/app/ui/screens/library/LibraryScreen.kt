@@ -39,7 +39,6 @@ fun LibraryScreen(
                 if (uiState.library.isEmpty()) {
                     Text("No saved items", modifier = Modifier.padding(horizontal = 16.dp))
                 } else {
-                    // Convert LibraryItem to MetaItem for grid
                     val metaItems = uiState.library.map { lib ->
                         MetaItem(
                             id = lib.id,
@@ -98,7 +97,6 @@ fun LibraryScreen(
                 if (uiState.history.isEmpty()) {
                     Text("No history", modifier = Modifier.padding(horizontal = 16.dp))
                 } else {
-                    // History items already have poster and name
                     val metaItems = uiState.history.map { hist ->
                         MetaItem(
                             id = hist.id,

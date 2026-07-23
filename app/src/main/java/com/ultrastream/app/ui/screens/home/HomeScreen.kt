@@ -55,10 +55,14 @@ fun HomeScreen(
         } else {
             uiState.catalogRows.forEach { (rowId, items) ->
                 item {
-                    // Extract a nice name from rowId (e.g., addonId_type_id)
+                    // Generate a human-friendly name from rowId
                     val parts = rowId.split("_")
                     val displayName = when {
-                        parts.size >= 3 -> "${parts[1].capitalize()}s"
+                        parts.size >= 3 -> {
+                            val type = parts[1]
+                            val name = parts.drop(2).joinToString(" ")
+                            "$type $name".replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+                        }
                         else -> "Catalog"
                     }
                     SectionHeader(title = displayName)

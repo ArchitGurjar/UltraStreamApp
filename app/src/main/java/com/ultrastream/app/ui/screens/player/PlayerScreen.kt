@@ -3,27 +3,22 @@ package com.ultrastream.app.ui.screens.player
 import android.app.Activity
 import android.media.AudioManager
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Forward
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.ui.PlayerView
 
@@ -35,8 +30,24 @@ fun PlayerScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
     val activity = context as? Activity
 
+    // Immersive mode: hide system bars
+    DisposableEffect(Unit) {
+        val window = activity?.window
+        val insetsController = window?.let { WindowInsetsControllerCompat(window, view) }
+        insetsController?.let {
+            it.hide(WindowInsetsCompat.Type.systemBars())
+            it.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+        onDispose {
+            // Restore system bars when exiting
+            insetsController?.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
+    // States from ViewModel
     val player by viewModel.player.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
     val duration by viewModel.duration.collectAsState()
@@ -46,16 +57,19 @@ fun PlayerScreen(
     val brightness by viewModel.brightness.collectAsState()
     val volume by viewModel.volume.collectAsState()
 
+    // Initialize player
     LaunchedEffect(url) {
         viewModel.initializePlayer(context, url, title)
     }
 
+    // Cleanup
     DisposableEffect(Unit) {
         onDispose {
             viewModel.releasePlayer()
         }
     }
 
+    // Apply brightness to window
     LaunchedEffect(brightness) {
         activity?.window?.let { window ->
             val layoutParams = window.attributes
@@ -64,6 +78,7 @@ fun PlayerScreen(
         }
     }
 
+    // Apply volume to system
     LaunchedEffect(volume) {
         val audioManager = context.getSystemService(AudioManager::class.java)
         val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
@@ -76,6 +91,7 @@ fun PlayerScreen(
             .fillMaxSize()
             .background(Color.Black)
     ) {
+        // PlayerView
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
@@ -93,11 +109,13 @@ fun PlayerScreen(
             }
         )
 
+        // Custom controls overlay
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
+            // Top bar with title and back button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -107,7 +125,9 @@ fun PlayerScreen(
                     color = Color.White,
                     style = MaterialTheme.typography.titleMedium
                 )
-                IconButton(onClick = onBack) {
+                IconButton(
+                    onClick = onBack
+                ) {
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = "Close",
@@ -118,6 +138,7 @@ fun PlayerScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
+            // Progress bar with live updates
             val progress = if (duration > 0) (currentPosition.toFloat() / duration.toFloat()) else 0f
             LinearProgressIndicator(
                 progress = progress,
@@ -128,6 +149,7 @@ fun PlayerScreen(
                 trackColor = Color.Gray.copy(alpha = 0.3f)
             )
 
+            // Time labels
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -146,6 +168,7 @@ fun PlayerScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            // Bottom controls
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
@@ -169,19 +192,24 @@ fun PlayerScreen(
             }
         }
 
+        // Gesture overlay for volume (right side) and brightness (left side)
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(Unit) {
                     detectDragGestures(
+                        onDragStart = { /* can show indicators */ },
+                        onDragEnd = { /* hide indicators */ },
                         onDrag = { change, dragAmount ->
                             change.consume()
                             val width = size.width
                             val deltaX = dragAmount.x / width
                             if (change.position.x < width / 2) {
+                                // Brightness
                                 val newBrightness = (brightness + deltaX).coerceIn(0f, 1f)
                                 viewModel.setBrightness(newBrightness)
                             } else {
+                                // Volume
                                 val newVolume = (volume + deltaX).coerceIn(0f, 1f)
                                 viewModel.setVolume(newVolume)
                             }
@@ -190,6 +218,7 @@ fun PlayerScreen(
                 }
         )
 
+        // Error message if any
         if (error != null) {
             Box(
                 modifier = Modifier
@@ -211,6 +240,7 @@ fun PlayerScreen(
     }
 }
 
+// Helper to format time
 private fun formatTime(millis: Long): String {
     if (millis <= 0) return "0:00"
     val seconds = millis / 1000

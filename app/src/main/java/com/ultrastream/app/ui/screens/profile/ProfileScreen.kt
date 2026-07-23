@@ -1,11 +1,8 @@
 package com.ultrastream.app.ui.screens.profile
 
-import android.Manifest
-import android.app.Activity
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
@@ -19,7 +16,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.gson.Gson
@@ -27,14 +23,12 @@ import com.google.gson.GsonBuilder
 import com.ultrastream.app.data.database.AppDatabase
 import com.ultrastream.app.data.preferences.PreferencesManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import java.io.File
-import java.io.FileOutputStream
-import java.io.InputStreamReader
 import javax.inject.Inject
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 @Composable
 fun ProfileScreen(
@@ -44,7 +38,6 @@ fun ProfileScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    // Launcher for importing backup
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -59,9 +52,6 @@ fun ProfileScreen(
             }
         }
     }
-
-    // Permission launcher (for Android 10+ we use MediaStore, for older we need WRITE_EXTERNAL_STORAGE)
-    // We'll handle export via MediaStore for Android 10+, else via FileProvider.
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -231,162 +221,137 @@ class ProfileViewModel @Inject constructor(
     }
 
     suspend fun exportData(context: Context): Boolean {
-        return withContext(Dispatchers.IO) {
-            try {
-                // Gather all data
-                val dataMap = mutableMapOf<String, Any>()
-                // Addons
-                dataMap["addons"] = database.addonDao().getAll()
-                dataMap["library"] = database.libraryDao().getAll()
-                dataMap["watchlist"] = database.watchlistDao().getAll()
-                dataMap["history"] = database.historyDao().getAll()
-                dataMap["watchedEpisodes"] = database.watchedEpisodeDao().getAll()
-                dataMap["watchProgress"] = database.watchProgressDao().getAll()
-                dataMap["smartPlaylists"] = database.smartPlaylistDao().getAll()
-                dataMap["profiles"] = database.profileDao().getAll()
-                dataMap["cachedMeta"] = database.cachedMetaDao().getAll()
+        return try {
+            val dataMap = mutableMapOf<String, Any>()
+            dataMap["addons"] = database.addonDao().getAll()
+            dataMap["library"] = database.libraryDao().getAll()
+            dataMap["watchlist"] = database.watchlistDao().getAll()
+            dataMap["history"] = database.historyDao().getAll()
+            dataMap["watchedEpisodes"] = database.watchedEpisodeDao().getAll()
+            dataMap["watchProgress"] = database.watchProgressDao().getAll()
+            dataMap["smartPlaylists"] = database.smartPlaylistDao().getAll()
+            dataMap["profiles"] = database.profileDao().getAll()
+            dataMap["cachedMeta"] = database.cachedMetaDao().getAll()
 
-                // Preferences
-                val prefs = mutableMapOf<String, Any>()
-                prefs["theme"] = runBlocking { preferencesManager.getTheme().collect { it } }
-                prefs["debridKey"] = runBlocking { preferencesManager.getDebridKey().collect { it } }
-                prefs["currentProfile"] = runBlocking { preferencesManager.getCurrentProfile().collect { it } }
-                prefs["hindiPriority"] = runBlocking { preferencesManager.getHindiPriority().collect { it } }
-                prefs["autoPlayNext"] = runBlocking { preferencesManager.getAutoPlayNext().collect { it } }
-                prefs["parentalControl"] = runBlocking { preferencesManager.getParentalControl().collect { it } }
-                dataMap["preferences"] = prefs
+            val prefs = mutableMapOf<String, Any>()
+            // Collect preferences synchronously (they are flows, but we'll use first() from runBlocking)
+            // Since we are in a suspend function, we can use first() on flows directly.
+            prefs["theme"] = preferencesManager.getTheme().first()
+            prefs["debridKey"] = preferencesManager.getDebridKey().first()
+            prefs["currentProfile"] = preferencesManager.getCurrentProfile().first()
+            prefs["hindiPriority"] = preferencesManager.getHindiPriority().first()
+            prefs["autoPlayNext"] = preferencesManager.getAutoPlayNext().first()
+            prefs["parentalControl"] = preferencesManager.getParentalControl().first()
+            dataMap["preferences"] = prefs
 
-                val gson = GsonBuilder().setPrettyPrinting().create()
-                val json = gson.toJson(dataMap)
+            val gson = GsonBuilder().setPrettyPrinting().create()
+            val json = gson.toJson(dataMap)
 
-                // Save to external storage via MediaStore (Android 10+)
-                val contentValues = ContentValues().apply {
-                    put(MediaStore.MediaColumns.DISPLAY_NAME, "ultrastream_backup.json")
-                    put(MediaStore.MediaColumns.MIME_TYPE, "application/json")
-                    put(MediaStore.MediaColumns.RELATIVE_PATH, if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        "Documents/UltraStream"
-                    } else {
-                        null
-                    })
+            val contentValues = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, "ultrastream_backup.json")
+                put(MediaStore.MediaColumns.MIME_TYPE, "application/json")
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, "Documents/UltraStream")
                 }
-                val resolver = context.contentResolver
-                val uri = resolver.insert(MediaStore.Files.getContentUri("external"), contentValues)
-                uri?.let {
-                    resolver.openOutputStream(uri)?.use { outputStream ->
-                        outputStream.write(json.toByteArray())
-                        return@withContext true
-                    }
-                }
-                // Fallback: write to cache and share via FileProvider
-                val cacheFile = File(context.cacheDir, "ultrastream_backup.json")
-                cacheFile.writeText(json)
-                val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                    type = "application/json"
-                    putExtra(Intent.EXTRA_STREAM, FileProvider.getUriForFile(
-                        context,
-                        "${context.packageName}.fileprovider",
-                        cacheFile
-                    ))
-                    flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
-                }
-                context.startActivity(Intent.createChooser(shareIntent, "Share Backup"))
-                true
-            } catch (e: Exception) {
-                e.printStackTrace()
-                false
             }
+            val resolver = context.contentResolver
+            val uri = resolver.insert(MediaStore.Files.getContentUri("external"), contentValues)
+            uri?.let {
+                resolver.openOutputStream(it)?.use { outputStream ->
+                    outputStream.write(json.toByteArray())
+                }
+                true
+            } ?: false
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
         }
     }
 
     suspend fun importData(context: Context, uri: Uri): Boolean {
-        return withContext(Dispatchers.IO) {
-            try {
-                val resolver = context.contentResolver
-                val inputStream = resolver.openInputStream(uri) ?: return@withContext false
-                val reader = InputStreamReader(inputStream)
-                val gson = Gson()
-                val dataMap = gson.fromJson(reader, Map::class.java) as Map<String, Any>
+        return try {
+            val resolver = context.contentResolver
+            val inputStream = resolver.openInputStream(uri) ?: return false
+            val gson = Gson()
+            val dataMap = gson.fromJson(inputStream.reader(), Map::class.java) as Map<String, Any>
 
-                // Restore addons
-                dataMap["addons"]?.let { list ->
-                    val addons = gson.fromJson(gson.toJson(list), Array<com.ultrastream.app.data.models.Addon>::class.java).toList()
-                    database.addonDao().insertAll(addons)
-                }
-                // Restore library
-                dataMap["library"]?.let { list ->
-                    val items = gson.fromJson(gson.toJson(list), Array<com.ultrastream.app.data.models.LibraryItem>::class.java).toList()
-                    database.libraryDao().insertAll(items)
-                }
-                // Restore watchlist
-                dataMap["watchlist"]?.let { list ->
-                    val items = gson.fromJson(gson.toJson(list), Array<com.ultrastream.app.data.models.WatchlistItem>::class.java).toList()
-                    database.watchlistDao().insertAll(items)
-                }
-                // Restore history
-                dataMap["history"]?.let { list ->
-                    val items = gson.fromJson(gson.toJson(list), Array<com.ultrastream.app.data.models.HistoryItem>::class.java).toList()
-                    database.historyDao().insertAll(items)
-                }
-                // Restore watched episodes
-                dataMap["watchedEpisodes"]?.let { list ->
-                    val items = gson.fromJson(gson.toJson(list), Array<com.ultrastream.app.data.models.WatchedEpisode>::class.java).toList()
-                    database.watchedEpisodeDao().insertAll(items)
-                }
-                // Restore watch progress
-                dataMap["watchProgress"]?.let { list ->
-                    val items = gson.fromJson(gson.toJson(list), Array<com.ultrastream.app.data.models.WatchProgress>::class.java).toList()
-                    database.watchProgressDao().insertAll(items)
-                }
-                // Restore smart playlists
-                dataMap["smartPlaylists"]?.let { list ->
-                    val items = gson.fromJson(gson.toJson(list), Array<com.ultrastream.app.data.models.SmartPlaylist>::class.java).toList()
-                    database.smartPlaylistDao().insertAll(items)
-                }
-                // Restore profiles
-                dataMap["profiles"]?.let { list ->
-                    val items = gson.fromJson(gson.toJson(list), Array<com.ultrastream.app.data.models.Profile>::class.java).toList()
-                    database.profileDao().insertAll(items)
-                }
-                // Restore cached meta
-                dataMap["cachedMeta"]?.let { list ->
-                    val items = gson.fromJson(gson.toJson(list), Array<com.ultrastream.app.data.models.CachedMeta>::class.java).toList()
-                    database.cachedMetaDao().insertAll(items)
-                }
-
-                // Restore preferences
-                (dataMap["preferences"] as? Map<String, Any>)?.let { prefs ->
-                    prefs["theme"]?.let { preferencesManager.setTheme(it.toString()) }
-                    prefs["debridKey"]?.let { preferencesManager.setDebridKey(it.toString()) }
-                    prefs["currentProfile"]?.let { preferencesManager.setCurrentProfile(it.toString()) }
-                    prefs["hindiPriority"]?.let { preferencesManager.setHindiPriority(it.toString().toBoolean()) }
-                    prefs["autoPlayNext"]?.let { preferencesManager.setAutoPlayNext(it.toString().toBoolean()) }
-                    prefs["parentalControl"]?.let { preferencesManager.setParentalControl(it.toString().toBoolean()) }
-                }
-
-                true
-            } catch (e: Exception) {
-                e.printStackTrace()
-                false
+            // Restore addons
+            (dataMap["addons"] as? List<*>)?.let { list ->
+                val addons = gson.fromJson(gson.toJson(list), Array<com.ultrastream.app.data.models.Addon>::class.java).toList()
+                database.addonDao().insertAll(addons)
             }
+            // Restore library
+            (dataMap["library"] as? List<*>)?.let { list ->
+                val items = gson.fromJson(gson.toJson(list), Array<com.ultrastream.app.data.models.LibraryItem>::class.java).toList()
+                database.libraryDao().insertAll(items)
+            }
+            // Restore watchlist
+            (dataMap["watchlist"] as? List<*>)?.let { list ->
+                val items = gson.fromJson(gson.toJson(list), Array<com.ultrastream.app.data.models.WatchlistItem>::class.java).toList()
+                database.watchlistDao().insertAll(items)
+            }
+            // Restore history
+            (dataMap["history"] as? List<*>)?.let { list ->
+                val items = gson.fromJson(gson.toJson(list), Array<com.ultrastream.app.data.models.HistoryItem>::class.java).toList()
+                database.historyDao().insertAll(items)
+            }
+            // Restore watched episodes
+            (dataMap["watchedEpisodes"] as? List<*>)?.let { list ->
+                val items = gson.fromJson(gson.toJson(list), Array<com.ultrastream.app.data.models.WatchedEpisode>::class.java).toList()
+                database.watchedEpisodeDao().insertAll(items)
+            }
+            // Restore watch progress
+            (dataMap["watchProgress"] as? List<*>)?.let { list ->
+                val items = gson.fromJson(gson.toJson(list), Array<com.ultrastream.app.data.models.WatchProgress>::class.java).toList()
+                database.watchProgressDao().insertAll(items)
+            }
+            // Restore smart playlists
+            (dataMap["smartPlaylists"] as? List<*>)?.let { list ->
+                val items = gson.fromJson(gson.toJson(list), Array<com.ultrastream.app.data.models.SmartPlaylist>::class.java).toList()
+                database.smartPlaylistDao().insertAll(items)
+            }
+            // Restore profiles
+            (dataMap["profiles"] as? List<*>)?.let { list ->
+                val items = gson.fromJson(gson.toJson(list), Array<com.ultrastream.app.data.models.Profile>::class.java).toList()
+                database.profileDao().insertAll(items)
+            }
+            // Restore cached meta
+            (dataMap["cachedMeta"] as? List<*>)?.let { list ->
+                val items = gson.fromJson(gson.toJson(list), Array<com.ultrastream.app.data.models.CachedMeta>::class.java).toList()
+                database.cachedMetaDao().insertAll(items)
+            }
+
+            // Restore preferences
+            (dataMap["preferences"] as? Map<String, Any>)?.let { prefs ->
+                prefs["theme"]?.let { preferencesManager.setTheme(it.toString()) }
+                prefs["debridKey"]?.let { preferencesManager.setDebridKey(it.toString()) }
+                prefs["currentProfile"]?.let { preferencesManager.setCurrentProfile(it.toString()) }
+                prefs["hindiPriority"]?.let { preferencesManager.setHindiPriority(it.toString().toBoolean()) }
+                prefs["autoPlayNext"]?.let { preferencesManager.setAutoPlayNext(it.toString().toBoolean()) }
+                prefs["parentalControl"]?.let { preferencesManager.setParentalControl(it.toString().toBoolean()) }
+            }
+
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
         }
     }
 
     suspend fun factoryReset(context: Context) {
-        withContext(Dispatchers.IO) {
-            // Clear all tables
-            database.addonDao().deleteAll()
-            database.libraryDao().deleteAll()
-            database.watchlistDao().deleteAll()
-            database.historyDao().deleteAll()
-            database.watchedEpisodeDao().deleteAll()
-            database.watchProgressDao().deleteAll()
-            database.smartPlaylistDao().deleteAll()
-            database.profileDao().deleteAll()
-            database.cachedMetaDao().deleteAll()
+        // Clear all tables
+        database.addonDao().deleteAll()
+        database.libraryDao().deleteAll()
+        database.watchlistDao().deleteAll()
+        database.historyDao().deleteAll()
+        database.watchedEpisodeDao().deleteAll()
+        database.watchProgressDao().deleteAll()
+        database.smartPlaylistDao().deleteAll()
+        database.profileDao().deleteAll()
+        database.cachedMetaDao().deleteAll()
 
-            // Clear DataStore
-            preferencesManager.clearAll()
-        }
+        // Clear DataStore
+        preferencesManager.clearAll()
     }
 
     data class ProfileUiState(
@@ -397,5 +362,3 @@ class ProfileViewModel @Inject constructor(
         val currentProfile: String = "default"
     )
 }
-
-// Add missing deleteAll methods in DAOs if not present. We'll add them in the script.
