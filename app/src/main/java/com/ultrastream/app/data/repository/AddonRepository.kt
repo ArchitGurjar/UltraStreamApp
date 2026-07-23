@@ -21,11 +21,8 @@ class AddonRepository @Inject constructor(
     private val catalogAdapter = moshi.adapter<List<Catalog>>(catalogListType)
 
     suspend fun installAddon(url: String): Addon? {
-        // FIXED: Handle | and spaces in URL safely
-        val safeUrl = url.trim().replace("|", "%7C").replace(" ", "%20")
-        
         val manifest = try {
-            stremioApi.getManifest(safeUrl)
+            stremioApi.getManifest(url)
         } catch (e: Exception) {
             return null
         }
@@ -54,7 +51,7 @@ class AddonRepository @Inject constructor(
         val catalogsJson = catalogAdapter.toJson(mappedCatalogs)
         val addon = Addon(
             id = manifest.id,
-            url = safeUrl, // FIXED: Saving safeUrl to database
+            url = url,
             name = manifest.name ?: manifest.id,
             catalogs = catalogsJson,
             enabled = true,

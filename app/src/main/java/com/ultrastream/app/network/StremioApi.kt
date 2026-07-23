@@ -17,12 +17,11 @@ interface StremioApi {
     suspend fun getStreams(@Url url: String): StreamResponse
 }
 
-// Response models
 data class ManifestResponse(
     val id: String,
     val name: String,
     val catalogs: List<Catalog>?,
-    val resources: List<Any>?, // FIXED: Changed to List<Any>? to handle both Strings and Objects without crashing
+    val resources: List<String>?,
     val types: List<String>?,
     val version: String?
 )
@@ -89,8 +88,7 @@ data class Stream(
     val name: String?,
     val description: String?,
     val infoHash: String?,
-    val subtitles: List<StreamSubtitle>?,
-    val isLive: Boolean = false
+    val subtitles: List<StreamSubtitle>?
 )
 
 data class StreamSubtitle(
