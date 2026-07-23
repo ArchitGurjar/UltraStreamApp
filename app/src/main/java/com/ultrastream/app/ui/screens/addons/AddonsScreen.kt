@@ -1,5 +1,6 @@
 package com.ultrastream.app.ui.screens.addons
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -7,11 +8,12 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.launch
-import android.widget.Toast
-import androidx.compose.ui.platform.LocalContext
 
 @Composable
 fun AddonsScreen(
@@ -19,7 +21,9 @@ fun AddonsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current // FIXED: Added proper context for UI Feedback
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+    
     var addonUrl by remember { mutableStateOf("") }
     var debridKey by remember { mutableStateOf(uiState.debridKey) }
 
@@ -31,23 +35,24 @@ fun AddonsScreen(
         item {
             Text("Addons", style = MaterialTheme.typography.headlineMedium)
         }
+        
+        // Addon URL Installation
         item {
             OutlinedTextField(
                 value = addonUrl,
                 onValueChange = { addonUrl = it },
-                label = { Text("Manifest URL") },
+                label = { Text("Manifest URL (https:// or stremio://)") },
                 modifier = Modifier.fillMaxWidth()
             )
             Button(
                 onClick = {
                     scope.launch {
-                        // FIXED: Added proper UI Feedback without deleting any logic
                         val success = viewModel.installAddon(addonUrl)
                         if (success) {
                             addonUrl = ""
-                            Toast.makeText(context, "✅ Addon Installed Successfully!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "✅ Addon Installed!", Toast.LENGTH_SHORT).show()
                         } else {
-                            Toast.makeText(context, "❌ Install Failed: Invalid URL or Parsing Error.", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, "❌ Install Failed: Check URL format.", Toast.LENGTH_LONG).show()
                         }
                     }
                 },
@@ -56,6 +61,47 @@ fun AddonsScreen(
                 Text("Install Addon")
             }
         }
+
+        // Import & Export exact Stremio JSON Array
+        item {
+            Text("Sync / Backup", style = MaterialTheme.typography.titleMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = {
+                        val json = viewModel.exportAddonsJson()
+                        if (json.isNotBlank()) {
+                            clipboardManager.setText(AnnotatedString(json))
+                            Toast.makeText(context, "✅ JSON Copied to Clipboard!", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Export JSON")
+                }
+                Button(
+                    onClick = {
+                        val json = clipboardManager.getText()?.text ?: ""
+                        if (json.isBlank()) {
+                            Toast.makeText(context, "Clipboard is empty!", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        scope.launch {
+                            val success = viewModel.importAddonsJson(json)
+                            if (success) {
+                                Toast.makeText(context, "✅ Addons Imported!", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, "❌ Invalid JSON format in clipboard.", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Import JSON")
+                }
+            }
+        }
+
+        // Debrid Settings
         item {
             Text("Real-Debrid Key", style = MaterialTheme.typography.titleMedium)
             OutlinedTextField(
@@ -68,6 +114,7 @@ fun AddonsScreen(
                 onClick = {
                     scope.launch {
                         viewModel.saveDebridKey(debridKey)
+                        Toast.makeText(context, "Saved!", Toast.LENGTH_SHORT).show()
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
@@ -75,8 +122,10 @@ fun AddonsScreen(
                 Text("Save Debrid Key")
             }
         }
+
+        // Installed Addons List
         item {
-            Text("Installed Addons", style = MaterialTheme.typography.titleMedium)
+            Text("Installed Addons (${uiState.addons.size})", style = MaterialTheme.typography.titleMedium)
         }
         items(uiState.addons.size) { index ->
             val addon = uiState.addons[index]
@@ -88,11 +137,11 @@ fun AddonsScreen(
                     modifier = Modifier.padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(addon.name, style = MaterialTheme.typography.titleSmall)
-                        Text(addon.url, style = MaterialTheme.typography.bodySmall)
+                        Text(addon.url, style = MaterialTheme.typography.bodySmall, maxLines = 1)
                     }
-                    Row {
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                         Switch(
                             checked = addon.enabled,
                             onCheckedChange = {

@@ -74,4 +74,8 @@ class AddonRepository @Inject constructor(
     suspend fun removeAddon(id: String) {
         addonDao.deleteById(id)
     }
+
+    suspend fun insertRawAddons(addons: List<Addon>) {
+        addonDao.insertAll(addons)
+    }
 }

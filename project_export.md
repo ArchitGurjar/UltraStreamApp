@@ -490,6 +490,7 @@ git commit -m "Fix: Fully implement dynamic stream fetching, home catalogs, and 
 git push origin main
 
 echo "[update_backend_logic] done. Pushed to GitHub."
+
 ```
 
 ---
@@ -1362,13 +1363,7 @@ echo "" >> "$OUTPUT_FILE"
 
 find app -type f \( -name "*.kt" -o -name "*.xml" -o -name "*.gradle" -o -name "*.properties" -o -name "*.pro" \) | while read -r file; do
     echo "### File: \`./$file\`" >> "$OUTPUT_FILE"
-    echo '```' >> "$OUTPUT_FILE"
-    cat "$file" >> "$OUTPUT_FILE"
-    echo '```' >> "$OUTPUT_FILE"
-    echo "" >> "$OUTPUT_FILE"
-done
-
-echo "✅ Project successfully exported to $OUTPUT_FILE"
+    echo '
 
 ```
 
@@ -1400,6 +1395,507 @@ else:
     print("isLive already exists or Stream model not found.")
 PYEOF
 
+```
+
+---
+
+## File: `apply_patches.sh`
+
+```bash
+#!/bin/bash
+set -e
+PKG="app/src/main/java/com/ultrastream/app"
+
+if [ ! -d "$PKG" ]; then
+  echo "ERROR: run this from your repo root (expected $PKG to exist)."
+  exit 1
+fi
+
+echo "==> Patching UltraStream project"
+
+python3 << 'PYEOF'
+import os
+
+PKG = "app/src/main/java/com/ultrastream/app"
+
+def read(path):
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read()
+
+def write(path, content):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
+    print(f"  wrote {path}")
+
+def patch(path, old, new):
+    if not os.path.exists(path):
+        print(f"  [skip] {path} not found")
+        return
+    content = read(path)
+    if new in content:
+        print(f"  [ok]   {path} already patched")
+        return
+    if old not in content:
+        print(f"  [FAIL] {path}: expected text not found — file may have changed since audit.")
+        return
+    write(path, content.replace(old, new, 1))
+
+# 1. Delete orphaned DAO
+p = f"{PKG}/data/dao/WatchedEpisodeDao.kt"
+if os.path.exists(p):
+    os.remove(p)
+    print(f"  deleted {p}")
+
+# 2. Delete duplicate ProfileViewModel
+p = f"{PKG}/ui/screens/profile/ProfileViewModel.kt"
+if os.path.exists(p):
+    os.remove(p)
+    print(f"  deleted {p}")
+
+# 3. Add first() import to ProfileScreen
+patch(
+    f"{PKG}/ui/screens/profile/ProfileScreen.kt",
+    "import kotlinx.coroutines.flow.asStateFlow\nimport kotlinx.coroutines.launch",
+    "import kotlinx.coroutines.flow.asStateFlow\nimport kotlinx.coroutines.flow.first\nimport kotlinx.coroutines.launch",
+)
+
+# 4. Add Color/Icons imports to PlayerScreen
+patch(
+    f"{PKG}/ui/screens/player/PlayerScreen.kt",
+    "import androidx.media3.ui.PlayerView",
+    "import androidx.media3.ui.PlayerView\n"
+    "import androidx.compose.ui.graphics.Color\n"
+    "import androidx.compose.material.icons.Icons\n"
+    "import androidx.compose.material.icons.filled.Close\n"
+    "import androidx.compose.material.icons.filled.Replay\n"
+    "import androidx.compose.material.icons.filled.Pause\n"
+    "import androidx.compose.material.icons.filled.PlayArrow\n"
+    "import androidx.compose.material.icons.filled.Forward\n"
+    "import androidx.compose.material.icons.filled.Fullscreen",
+)
+
+# 5. AppDatabase.kt
+write(f"{PKG}/data/database/AppDatabase.kt", '''package com.ultrastream.app.data.database
+
+import androidx.room.Database
+import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
+import com.ultrastream.app.data.dao.*
+import com.ultrastream.app.data.models.*
+
+@Database(
+    entities = [
+        Addon::class,
+        LibraryItem::class,
+        WatchlistItem::class,
+        HistoryItem::class,
+        CachedMeta::class,
+        SmartPlaylist::class,
+        Profile::class,
+        WatchProgress::class,
+        WatchedEpisode::class
+    ],
+    version = 1,
+    exportSchema = false
+)
+@TypeConverters(Converters::class)
+abstract class AppDatabase : RoomDatabase() {
+    abstract fun addonDao(): AddonDao
+    abstract fun libraryDao(): LibraryDao
+    abstract fun watchlistDao(): WatchlistDao
+    abstract fun historyDao(): HistoryDao
+    abstract fun cachedMetaDao(): CachedMetaDao
+    abstract fun smartPlaylistDao(): SmartPlaylistDao
+    abstract fun profileDao(): ProfileDao
+    abstract fun watchProgressDao(): WatchProgressDao
+    abstract fun watchedEpisodeDao(): WatchedEpisodeDao
+}
+''')
+
+# 6. DatabaseModule.kt
+write(f"{PKG}/di/DatabaseModule.kt", '''package com.ultrastream.app.di
+
+import android.content.Context
+import androidx.room.Room
+import com.ultrastream.app.data.dao.*
+import com.ultrastream.app.data.database.AppDatabase
+import dagger.Module
+import dagger.Provides
+import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
+import dagger.hilt.components.SingletonComponent
+import javax.inject.Singleton
+
+@Module
+@InstallIn(SingletonComponent::class)
+object DatabaseModule {
+
+    @Provides
+    @Singleton
+    fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
+        return Room.databaseBuilder(context, AppDatabase::class.java, "ultrastream.db")
+            .fallbackToDestructiveMigration()
+            .build()
+    }
+
+    @Provides fun provideAddonDao(db: AppDatabase): AddonDao = db.addonDao()
+    @Provides fun provideLibraryDao(db: AppDatabase): LibraryDao = db.libraryDao()
+    @Provides fun provideWatchlistDao(db: AppDatabase): WatchlistDao = db.watchlistDao()
+    @Provides fun provideHistoryDao(db: AppDatabase): HistoryDao = db.historyDao()
+    @Provides fun provideCachedMetaDao(db: AppDatabase): CachedMetaDao = db.cachedMetaDao()
+    @Provides fun provideSmartPlaylistDao(db: AppDatabase): SmartPlaylistDao = db.smartPlaylistDao()
+    @Provides fun provideProfileDao(db: AppDatabase): ProfileDao = db.profileDao()
+    @Provides fun provideWatchProgressDao(db: AppDatabase): WatchProgressDao = db.watchProgressDao()
+    @Provides fun provideWatchedEpisodeDao(db: AppDatabase): WatchedEpisodeDao = db.watchedEpisodeDao()
+}
+''')
+
+# 7. PreferencesManager.kt
+patch(
+    f"{PKG}/data/preferences/PreferencesManager.kt",
+    "import kotlinx.coroutines.flow.Flow\nimport kotlinx.coroutines.flow.map\n\n"
+    "val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = \"settings\")\n\n"
+    "class PreferencesManager(private val context: Context) {",
+    "import dagger.hilt.android.qualifiers.ApplicationContext\n"
+    "import kotlinx.coroutines.flow.Flow\n"
+    "import kotlinx.coroutines.flow.map\n"
+    "import javax.inject.Inject\n"
+    "import javax.inject.Singleton\n\n"
+    "val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = \"settings\")\n\n"
+    "@Singleton\n"
+    "class PreferencesManager @Inject constructor(@ApplicationContext private val context: Context) {",
+)
+
+# 8. NavRoutes.kt
+write(f"{PKG}/ui/navigation/NavRoutes.kt", '''package com.ultrastream.app.ui.navigation
+
+import java.net.URLEncoder
+
+sealed class Screen(val route: String) {
+    object Home : Screen("home")
+    object Library : Screen("library")
+    object Search : Screen("search")
+    object Addons : Screen("addons")
+    object Profile : Screen("profile")
+    object Details : Screen("details/{id}/{type}") {
+        fun pass(id: String, type: String) =
+            "details/${URLEncoder.encode(id, "UTF-8")}/${URLEncoder.encode(type, "UTF-8")}"
+    }
+    object Player : Screen("player/{url}") {
+        fun pass(url: String) = "player/${URLEncoder.encode(url, "UTF-8")}"
+    }
+}
+''')
+
+# 9. MainActivity.kt
+patch(
+    f"{PKG}/MainActivity.kt",
+    "import dagger.hilt.android.AndroidEntryPoint",
+    "import dagger.hilt.android.AndroidEntryPoint\nimport java.net.URLDecoder",
+)
+patch(
+    f"{PKG}/MainActivity.kt",
+    '            composable(Screen.Details.route) { backStackEntry ->\n'
+    '                val id = backStackEntry.arguments?.getString("id") ?: ""\n'
+    '                val type = backStackEntry.arguments?.getString("type") ?: ""',
+    '            composable(Screen.Details.route) { backStackEntry ->\n'
+    '                val id = URLDecoder.decode(backStackEntry.arguments?.getString("id") ?: "", "UTF-8")\n'
+    '                val type = URLDecoder.decode(backStackEntry.arguments?.getString("type") ?: "", "UTF-8")',
+)
+patch(
+    f"{PKG}/MainActivity.kt",
+    '            composable(Screen.Player.route) { backStackEntry ->\n'
+    '                val url = backStackEntry.arguments?.getString("url") ?: ""',
+    '            composable(Screen.Player.route) { backStackEntry ->\n'
+    '                val url = URLDecoder.decode(backStackEntry.arguments?.getString("url") ?: "", "UTF-8")',
+)
+
+# 10. StremioApi.kt
+write(f"{PKG}/network/StremioApi.kt", '''package com.ultrastream.app.network
+
+import retrofit2.http.GET
+import retrofit2.http.Url
+
+interface StremioApi {
+    @GET
+    suspend fun getManifest(@Url url: String): ManifestResponse
+
+    @GET
+    suspend fun getCatalog(@Url url: String): CatalogResponse
+
+    @GET
+    suspend fun getMeta(@Url url: String): MetaResponse
+
+    @GET
+    suspend fun getStreams(@Url url: String): StreamResponse
+}
+
+data class ManifestResponse(
+    val id: String,
+    val name: String,
+    val catalogs: List<Catalog>?,
+    val resources: List<String>?,
+    val types: List<String>?,
+    val version: String?
+)
+
+data class Catalog(
+    val type: String,
+    val id: String,
+    val name: String,
+    val extraSupported: List<String>? = null,
+    val extra: List<Extra>? = null
+)
+
+data class Extra(
+    val name: String,
+    val isRequired: Boolean = false,
+    val options: List<String>? = null
+)
+
+data class CatalogResponse(
+    val metas: List<Meta>? = emptyList()
+)
+
+data class MetaResponse(
+    val meta: Meta?
+)
+
+data class Meta(
+    val id: String,
+    val type: String,
+    val name: String,
+    val poster: String?,
+    val background: String?,
+    val imdbRating: String?,
+    val year: String?,
+    val releaseInfo: String?,
+    val released: String?,
+    val description: String?,
+    val genre: List<String>?,
+    val runtime: String?,
+    val cast: List<String>?,
+    val imdb_id: String?,
+    val videos: List<Video>? = null
+)
+
+data class Video(
+    val season: Int?,
+    val episode: Int?,
+    val name: String?,
+    val title: String?,
+    val description: String?,
+    val thumbnail: String?,
+    val url: String?
+)
+
+data class StreamResponse(
+    val streams: List<Stream>? = emptyList()
+)
+
+data class Stream(
+    val url: String?,
+    val streamUrl: String?,
+    val externalUrl: String?,
+    val title: String?,
+    val name: String?,
+    val description: String?,
+    val infoHash: String?,
+    val subtitles: List<StreamSubtitle>?
+)
+
+data class StreamSubtitle(
+    val url: String?,
+    val file: String?,
+    val lang: String?,
+    val name: String?
+)
+''')
+
+# 11. AddonUrl.kt
+write(f"{PKG}/utils/AddonUrl.kt", '''package com.ultrastream.app.utils
+
+fun buildAddonBaseUrl(addonUrl: String): String {
+    var base = addonUrl
+    if (base.endsWith("/manifest.json")) base = base.removeSuffix("/manifest.json")
+    else if (base.endsWith("manifest.json")) base = base.removeSuffix("manifest.json")
+    if (base.endsWith("/")) base = base.removeSuffix("/")
+    return base
+}
+''')
+
+# 12. AddonRepository.kt
+write(f"{PKG}/data/repository/AddonRepository.kt", '''package com.ultrastream.app.data.repository
+
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
+import com.ultrastream.app.data.dao.AddonDao
+import com.ultrastream.app.data.models.Addon
+import com.ultrastream.app.data.models.Catalog
+import com.ultrastream.app.data.models.Extra
+import com.ultrastream.app.network.StremioApi
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Singleton
+class AddonRepository @Inject constructor(
+    private val addonDao: AddonDao,
+    private val stremioApi: StremioApi,
+    private val moshi: Moshi
+) {
+
+    private val catalogListType = Types.newParameterizedType(List::class.java, Catalog::class.java)
+    private val catalogAdapter = moshi.adapter<List<Catalog>>(catalogListType)
+
+    suspend fun installAddon(url: String): Addon? {
+        val manifest = try {
+            stremioApi.getManifest(url)
+        } catch (e: Exception) {
+            return null
+        }
+        if (manifest.id.isBlank()) return null
+
+        val existing = addonDao.getById(manifest.id)
+        if (existing != null) return existing
+
+        val netCatalogs = manifest.catalogs ?: emptyList()
+        val mappedCatalogs = netCatalogs.map { netCat ->
+            Catalog(
+                type = netCat.type,
+                id = netCat.id,
+                name = netCat.name,
+                extraSupported = netCat.extraSupported,
+                extra = netCat.extra?.map {
+                    Extra(
+                        name = it.name,
+                        isRequired = it.isRequired,
+                        options = it.options
+                    )
+                }
+            )
+        }
+
+        val catalogsJson = catalogAdapter.toJson(mappedCatalogs)
+        val addon = Addon(
+            id = manifest.id,
+            url = url,
+            name = manifest.name ?: manifest.id,
+            catalogs = catalogsJson,
+            enabled = true,
+            required = false
+        )
+        addonDao.insert(addon)
+        return addon
+    }
+
+    suspend fun getAllAddons(): List<Addon> = addonDao.getAll()
+
+    suspend fun getEnabledAddons(): List<Addon> {
+        return addonDao.getAll().filter { it.enabled }
+    }
+
+    suspend fun toggleAddon(id: String, enabled: Boolean) {
+        addonDao.updateEnabled(id, enabled)
+    }
+
+    suspend fun removeAddon(id: String) {
+        addonDao.deleteById(id)
+    }
+}
+''')
+
+# 13. MetaRepository.kt
+write(f"{PKG}/data/repository/MetaRepository.kt", '''package com.ultrastream.app.data.repository
+
+import com.ultrastream.app.data.dao.CachedMetaDao
+import com.ultrastream.app.data.models.CachedMeta
+import com.ultrastream.app.data.models.MetaItem
+import com.ultrastream.app.data.models.Video
+import com.ultrastream.app.network.Meta
+import com.ultrastream.app.network.StremioApi
+import com.ultrastream.app.utils.buildAddonBaseUrl
+import com.squareup.moshi.Moshi
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Singleton
+class MetaRepository @Inject constructor(
+    private val cachedMetaDao: CachedMetaDao,
+    private val addonRepository: AddonRepository,
+    private val stremioApi: StremioApi,
+    private val moshi: Moshi
+) {
+
+    suspend fun getMeta(id: String, type: String): MetaItem? {
+        val cacheKey = "$id:$type"
+        val cached = cachedMetaDao.getByKey(cacheKey)
+        if (cached != null) {
+            return try {
+                moshi.adapter(MetaItem::class.java).fromJson(cached.json)
+            } catch (e: Exception) {
+                null
+            }
+        }
+
+        val addons = addonRepository.getEnabledAddons()
+        var meta: Meta? = null
+        for (addon in addons) {
+            val base = buildAddonBaseUrl(addon.url)
+            val fullUrl = "$base/meta/$type/$id.json"
+            meta = try {
+                stremioApi.getMeta(fullUrl).meta
+            } catch (e: Exception) {
+                null
+            }
+            if (meta != null) break
+        }
+        if (meta == null) return null
+
+        val metaItem = convertToMetaItem(meta)
+        val json = moshi.adapter(MetaItem::class.java).toJson(metaItem)
+        cachedMetaDao.insert(CachedMeta(cacheKey, json))
+        return metaItem
+    }
+
+    private fun convertToMetaItem(meta: Meta): MetaItem {
+        return MetaItem(
+            id = meta.id,
+            type = meta.type,
+            name = meta.name,
+            poster = meta.poster,
+            background = meta.background,
+            imdbRating = meta.imdbRating,
+            year = meta.year,
+            releaseInfo = meta.releaseInfo,
+            released = meta.released,
+            description = meta.description,
+            genre = meta.genre,
+            runtime = meta.runtime,
+            cast = meta.cast,
+            imdbId = meta.imdb_id,
+            videos = meta.videos?.map {
+                Video(
+                    season = it.season,
+                    episode = it.episode,
+                    name = it.name,
+                    title = it.title,
+                    description = it.description,
+                    thumbnail = it.thumbnail,
+                    url = it.url
+                )
+            }
+        )
+    }
+}
+''')
+
+PYEOF
+
+echo "==> Staging and pushing changes to GitHub..."
+git add -A
+git commit -m "Fix: All Kotlin compilation issues and missing DetailsScreen"
+git push origin main
 
 ```
 
@@ -2053,6 +2549,7 @@ git commit -m "Fix: Fully implement player controls, live progress, and stream f
 git push origin main
 
 echo "[update_player_and_details] done. Pushed to GitHub."
+
 ```
 
 ---
@@ -3550,6 +4047,7 @@ echo "   (These imports may already exist; if not, add them manually.)"
 echo "✅ All files have been updated successfully."
 echo "📦 You can now build the project using ./gradlew assembleDebug"
 echo "🚀 Done."
+
 ```
 
 ---
@@ -3741,262 +4239,6 @@ dependencies {
 
 ---
 
-## File: `app/src/main/java/com/ultrastream/MainActivity.kt`
-
-```kotlin
-// app/src/main/java/com/ultrastream/MainActivity.kt
-package com.ultrastream
-
-import android.content.Intent
-import android.os.Bundle
-import androidx.appcompat.app.AppCompatActivity
-import androidx.navigation.NavController
-import androidx.navigation.fragment.NavHostFragment
-import androidx.navigation.ui.setupWithNavController
-import com.google.android.material.bottomnavigation.BottomNavigationView
-import com.ultrastream.databinding.ActivityMainBinding
-import com.ultrastream.ui.details.DetailsActivity
-
-class MainActivity : AppCompatActivity() {
-
-    private lateinit var binding: ActivityMainBinding
-    private lateinit var navController: NavController
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
-
-        val navHostFragment = supportFragmentManager
-            .findFragmentById(R.id.nav_host_fragment) as NavHostFragment
-        navController = navHostFragment.navController
-
-        val bottomNav = findViewById<BottomNavigationView>(R.id.bottom_nav)
-        bottomNav.setupWithNavController(navController)
-    }
-
-    companion object {
-        const val REQUEST_CODE_PLAYER = 1001
-    }
-}
-
-```
-
----
-
-## File: `app/src/main/java/com/ultrastream/ui/details/DetailsActivity.kt`
-
-```kotlin
-package com.ultrastream.ui.details
-
-import android.os.Bundle
-import android.view.View
-import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
-import com.bumptech.glide.Glide
-import com.google.android.material.chip.Chip
-import com.ultrastream.R
-import com.ultrastream.UltraStreamApplication
-import com.ultrastream.databinding.ActivityDetailsBinding
-import com.ultrastream.data.models.MetaItem
-import com.ultrastream.data.models.Video
-import com.ultrastream.ui.adapters.EpisodeAdapter
-import com.ultrastream.ui.sheets.SeasonSelectBottomSheet
-import com.ultrastream.ui.sheets.StreamBottomSheet
-import com.ultrastream.utils.NetworkUtils
-import kotlinx.coroutines.launch
-
-class DetailsActivity : AppCompatActivity() {
-
-    private lateinit var binding: ActivityDetailsBinding
-    private lateinit var metaItem: MetaItem
-    private var metaId: String = ""
-    private var metaType: String = ""
-
-    private lateinit var episodeAdapter: EpisodeAdapter
-    private var allEpisodes: List<Video> = emptyList()
-    private var currentSeason: Int = 1
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        binding = ActivityDetailsBinding.inflate(layoutInflater)
-        setContentView(binding.root)
-
-        metaId = intent.getStringExtra("meta_id") ?: ""
-        metaType = intent.getStringExtra("meta_type") ?: "movie"
-
-        loadMetadata()
-        setupListeners()
-    }
-
-    private fun loadMetadata() {
-        showLoading(true)
-        lifecycleScope.launch {
-            val app = application as UltraStreamApplication
-            var cached = app.repository.getCachedMeta(metaId)
-            if (cached == null) {
-                val fetched = NetworkUtils.fetchMeta(metaId, metaType)
-                if (fetched != null) {
-                    app.repository.cacheMeta(fetched)
-                    metaItem = fetched
-                } else {
-                    showLoading(false)
-                    return@launch
-                }
-            } else {
-                metaItem = cached
-            }
-            showLoading(false)
-            populateUI()
-        }
-    }
-
-    private fun populateUI() {
-        Glide.with(this)
-            .load(metaItem.poster ?: metaItem.background)
-            .placeholder(R.drawable.placeholder_poster)
-            .into(binding.heroImage)
-
-        binding.tvNetwork.text = metaItem.type.uppercase()
-        binding.tvTitle.text = metaItem.name
-        binding.tvYear.text = metaItem.year?.toString() ?: ""
-        binding.tvRuntime.text = metaItem.runtime ?: "N/A"
-        binding.tvRating.text = "⭐ ${metaItem.imdbRating ?: "N/A"}"
-        binding.tvGenre.text = metaItem.genre?.take(3)?.joinToString(", ") ?: ""
-
-        binding.tvDescription.text = metaItem.description ?: "No description available."
-        if (metaItem.description?.length ?: 0 > 200) {
-            binding.tvReadMore.visibility = View.VISIBLE
-            binding.tvReadMore.setOnClickListener {
-                binding.tvDescription.maxLines = if (binding.tvDescription.maxLines == 4) Int.MAX_VALUE else 4
-                binding.tvReadMore.text = if (binding.tvDescription.maxLines == Int.MAX_VALUE) "Read less" else "Read more"
-            }
-        }
-
-        metaItem.cast?.take(8)?.forEach { actor ->
-            val chip = Chip(this).apply {
-                text = actor
-                isClickable = true
-                setOnClickListener { /* search actor */ }
-            }
-            binding.castChipGroup.addView(chip)
-        }
-
-        if (!metaItem.imdbId.isNullOrEmpty()) {
-            binding.btnImdb.visibility = View.VISIBLE
-            binding.btnImdb.setOnClickListener { /* open IMDb */ }
-        }
-
-        val isEpisodic = !metaItem.videos.isNullOrEmpty()
-        if (isEpisodic) {
-            binding.episodesContainer.visibility = View.VISIBLE
-            binding.btnFindStreams.visibility = View.GONE
-            setupEpisodes()
-        } else {
-            binding.episodesContainer.visibility = View.GONE
-            binding.btnFindStreams.visibility = View.VISIBLE
-            binding.btnFindStreams.setOnClickListener {
-                showStreams(null)
-            }
-        }
-
-        updateWatchlistIcon()
-        updateLibraryIcon()
-    }
-
-    private fun setupEpisodes() {
-        val videos = metaItem.videos ?: emptyList()
-        allEpisodes = videos.filter { it.season > 0 && it.episode > 0 }
-            .sortedWith(compareBy<Video> { it.season }.thenBy { it.episode })
-
-        if (allEpisodes.isEmpty()) {
-            binding.episodesContainer.visibility = View.GONE
-            binding.btnFindStreams.visibility = View.VISIBLE
-            return
-        }
-
-        currentSeason = allEpisodes.firstOrNull()?.season ?: 1
-
-        episodeAdapter = EpisodeAdapter { episode ->
-            showStreams(episode)
-        }
-
-        val seasonBtn = binding.sectionMore
-        seasonBtn.visibility = View.VISIBLE
-        seasonBtn.text = "Season $currentSeason ▼"
-        seasonBtn.setOnClickListener {
-            showSeasonSelector()
-        }
-
-        renderEpisodes()
-    }
-
-    private fun renderEpisodes() {
-        val filtered = allEpisodes.filter { it.season == currentSeason }
-        episodeAdapter.submitList(filtered)
-    }
-
-    private fun showSeasonSelector() {
-        val seasons = allEpisodes.map { it.season }.distinct().sorted()
-        val bottomSheet = SeasonSelectBottomSheet(seasons, currentSeason) { selectedSeason ->
-            currentSeason = selectedSeason
-            binding.sectionMore.text = "Season $currentSeason ▼"
-            renderEpisodes()
-        }
-        bottomSheet.show(supportFragmentManager, "season_selector")
-    }
-
-    private fun showStreams(episode: Video?) {
-        val bottomSheet = StreamBottomSheet(metaId, metaType, episode)
-        bottomSheet.show(supportFragmentManager, "stream_sheet")
-    }
-
-    private fun updateWatchlistIcon() {
-        val inWatchlist = false
-        binding.btnWatchlist.setImageResource(
-            if (inWatchlist) R.drawable.ic_watchlist_filled else R.drawable.ic_watchlist
-        )
-        binding.btnWatchlist.setOnClickListener { toggleWatchlist() }
-    }
-
-    private fun toggleWatchlist() {
-        lifecycleScope.launch {
-            // Add/remove from watchlist
-        }
-    }
-
-    private fun updateLibraryIcon() {
-        val inLibrary = false
-        binding.btnLibrary.setImageResource(
-            if (inLibrary) R.drawable.ic_bookmark_filled else R.drawable.ic_bookmark
-        )
-        binding.btnLibrary.setOnClickListener { toggleLibrary() }
-    }
-
-    private fun toggleLibrary() {
-        lifecycleScope.launch {
-            // Add/remove from library
-        }
-    }
-
-    private fun showLoading(show: Boolean) {
-        binding.loadingOverlay.visibility = if (show) View.VISIBLE else View.GONE
-    }
-
-    private fun setupListeners() {
-        binding.btnBack.setOnClickListener { finish() }
-    }
-
-    companion object {
-        const val EXTRA_META_ID = "meta_id"
-        const val EXTRA_META_TYPE = "meta_type"
-    }
-}
-
-```
-
----
-
 ## File: `app/src/main/java/com/ultrastream/app/UltraStreamApplication.kt`
 
 ```kotlin
@@ -4132,7 +4374,7 @@ class MainActivity : ComponentActivity() {
                         id = id,
                         type = type,
                         onBack = { navController.popBackStack() },
-                        onPlay = { stream, title ->
+                        onPlay = { stream: StreamItem, title: String ->
                             val json = moshi.adapter(StreamItem::class.java).toJson(stream)
                             navController.navigate(Screen.Player.pass(json, title))
                         }
@@ -4743,17 +4985,22 @@ import android.app.Activity
 import android.media.AudioManager
 import android.os.Build
 import android.view.ViewGroup
-import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Forward
+import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -4767,8 +5014,6 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.media3.ui.PlayerView
 import com.ultrastream.app.data.models.StreamItem
-import com.ultrastream.app.ui.theme.LocalCustomColors
-import kotlinx.coroutines.delay
 
 @Composable
 fun PlayerScreen(
@@ -4780,9 +5025,7 @@ fun PlayerScreen(
     val context = LocalContext.current
     val view = LocalView.current
     val activity = context as? Activity
-    val customColors = LocalCustomColors.current
 
-    // Immersive mode
     DisposableEffect(Unit) {
         val window = activity?.window
         val insetsController = window?.let { WindowInsetsControllerCompat(it, view) }
@@ -4814,7 +5057,6 @@ fun PlayerScreen(
         }
     }
 
-    // Brightness
     LaunchedEffect(brightness) {
         activity?.window?.let { window ->
             val layoutParams = window.attributes
@@ -4823,7 +5065,6 @@ fun PlayerScreen(
         }
     }
 
-    // Volume
     LaunchedEffect(volume) {
         val audioManager = context.getSystemService(AudioManager::class.java)
         val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
@@ -4831,7 +5072,6 @@ fun PlayerScreen(
         audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0)
     }
 
-    // Lifecycle handling for PiP and background
     DisposableEffect(Unit) {
         val listener = LifecycleEventObserver { _, event ->
             when (event) {
@@ -4856,9 +5096,8 @@ fun PlayerScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(androidx.compose.ui.graphics.Color.Black)
+            .background(Color.Black)
     ) {
-        // PlayerView
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
@@ -4876,20 +5115,18 @@ fun PlayerScreen(
             }
         )
 
-        // Custom controls overlay
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            // Top bar
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
                     text = if (playerTitle.isNotEmpty()) playerTitle else title,
-                    color = androidx.compose.ui.graphics.Color.White,
+                    color = Color.White,
                     style = MaterialTheme.typography.titleMedium
                 )
                 Row {
@@ -4897,14 +5134,14 @@ fun PlayerScreen(
                         Icon(
                             imageVector = Icons.Default.PictureInPicture,
                             contentDescription = "Picture in Picture",
-                            tint = androidx.compose.ui.graphics.Color.White
+                            tint = Color.White
                         )
                     }
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = "Close",
-                            tint = androidx.compose.ui.graphics.Color.White
+                            tint = Color.White
                         )
                     }
                 }
@@ -4912,7 +5149,6 @@ fun PlayerScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // Progress
             val progress = if (duration > 0) (currentPosition.toFloat() / duration.toFloat()) else 0f
             LinearProgressIndicator(
                 progress = progress,
@@ -4920,7 +5156,7 @@ fun PlayerScreen(
                     .fillMaxWidth()
                     .height(6.dp),
                 color = MaterialTheme.colorScheme.primary,
-                trackColor = androidx.compose.ui.graphics.Color.Gray.copy(alpha = 0.3f)
+                trackColor = Color.Gray.copy(alpha = 0.3f)
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -4928,40 +5164,38 @@ fun PlayerScreen(
             ) {
                 Text(
                     text = formatTime(currentPosition),
-                    color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.7f),
+                    color = Color.White.copy(alpha = 0.7f),
                     style = MaterialTheme.typography.labelSmall
                 )
                 Text(
                     text = formatTime(duration),
-                    color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.7f),
+                    color = Color.White.copy(alpha = 0.7f),
                     style = MaterialTheme.typography.labelSmall
                 )
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Bottom controls
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 IconButton(onClick = { viewModel.skipBackward() }) {
-                    Icon(Icons.Default.Replay, contentDescription = "Back 10s", tint = androidx.compose.ui.graphics.Color.White)
+                    Icon(Icons.Default.Replay, contentDescription = "Back 10s", tint = Color.White)
                 }
                 IconButton(onClick = { viewModel.playPause() }) {
                     Icon(
                         if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = "Play/Pause",
-                        tint = androidx.compose.ui.graphics.Color.White
+                        tint = Color.White
                     )
                 }
                 IconButton(onClick = { viewModel.skipForward() }) {
-                    Icon(Icons.Default.Forward, contentDescription = "Forward 10s", tint = androidx.compose.ui.graphics.Color.White)
+                    Icon(Icons.Default.Forward, contentDescription = "Forward 10s", tint = Color.White)
                 }
             }
         }
 
-        // Gesture overlay
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -5202,9 +5436,9 @@ import android.os.Build
 import android.provider.MediaStore
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.gson.Gson
-import com.google.gson.GsonBuilder
-import com.ultrastream.app.data.database.AppDatabase
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import com.ultrastream.app.data.dao.*
 import com.ultrastream.app.data.preferences.PreferencesManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -5213,11 +5447,19 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import java.io.File
+import java.io.FileOutputStream
+import java.io.InputStream
 
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     private val preferencesManager: PreferencesManager,
-    private val database: AppDatabase
+    private val libraryDao: LibraryDao,
+    private val watchlistDao: WatchlistDao,
+    private val historyDao: HistoryDao,
+    private val watchProgressDao: WatchProgressDao,
+    private val addonDao: AddonDao,
+    private val profileDao: ProfileDao
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
@@ -5230,18 +5472,18 @@ class ProfileViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            preferencesManager.getHindiPriority().collect { priority ->
-                _uiState.value = _uiState.value.copy(hindiPriority = priority)
+            preferencesManager.getHindiPriority().collect { enabled ->
+                _uiState.value = _uiState.value.copy(hindiPriority = enabled)
             }
         }
         viewModelScope.launch {
-            preferencesManager.getAutoPlayNext().collect { auto ->
-                _uiState.value = _uiState.value.copy(autoPlayNext = auto)
+            preferencesManager.getAutoPlayNext().collect { enabled ->
+                _uiState.value = _uiState.value.copy(autoPlayNext = enabled)
             }
         }
         viewModelScope.launch {
-            preferencesManager.getParentalControl().collect { pc ->
-                _uiState.value = _uiState.value.copy(parentalControl = pc)
+            preferencesManager.getParentalControl().collect { enabled ->
+                _uiState.value = _uiState.value.copy(parentalControl = enabled)
             }
         }
         viewModelScope.launch {
@@ -5255,153 +5497,102 @@ class ProfileViewModel @Inject constructor(
         val current = uiState.value.theme
         val newTheme = if (current == "dark") "light" else "dark"
         preferencesManager.setTheme(newTheme)
+        _uiState.value = _uiState.value.copy(theme = newTheme)
     }
 
     suspend fun toggleHindiPriority() {
-        val current = uiState.value.hindiPriority
-        preferencesManager.setHindiPriority(!current)
+        val new = !uiState.value.hindiPriority
+        preferencesManager.setHindiPriority(new)
+        _uiState.value = _uiState.value.copy(hindiPriority = new)
     }
 
     suspend fun toggleAutoPlayNext() {
-        val current = uiState.value.autoPlayNext
-        preferencesManager.setAutoPlayNext(!current)
+        val new = !uiState.value.autoPlayNext
+        preferencesManager.setAutoPlayNext(new)
+        _uiState.value = _uiState.value.copy(autoPlayNext = new)
     }
 
     suspend fun toggleParentalControl() {
-        val current = uiState.value.parentalControl
-        preferencesManager.setParentalControl(!current)
+        val new = !uiState.value.parentalControl
+        preferencesManager.setParentalControl(new)
+        _uiState.value = _uiState.value.copy(parentalControl = new)
     }
 
     suspend fun exportData(context: Context): Boolean {
         return try {
-            val dataMap = mutableMapOf<String, Any>()
-            dataMap["addons"] = database.addonDao().getAll()
-            dataMap["library"] = database.libraryDao().getAll()
-            dataMap["watchlist"] = database.watchlistDao().getAll()
-            dataMap["history"] = database.historyDao().getAll()
-            dataMap["watchedEpisodes"] = database.watchedEpisodeDao().getAll()
-            dataMap["watchProgress"] = database.watchProgressDao().getAll()
-            dataMap["smartPlaylists"] = database.smartPlaylistDao().getAll()
-            dataMap["profiles"] = database.profileDao().getAll()
-            dataMap["cachedMeta"] = database.cachedMetaDao().getAll()
-
-            val prefs = mutableMapOf<String, Any>()
-            prefs["theme"] = preferencesManager.getTheme().first()
-            prefs["debridKey"] = preferencesManager.getDebridKey().first()
-            prefs["currentProfile"] = preferencesManager.getCurrentProfile().first()
-            prefs["hindiPriority"] = preferencesManager.getHindiPriority().first()
-            prefs["autoPlayNext"] = preferencesManager.getAutoPlayNext().first()
-            prefs["parentalControl"] = preferencesManager.getParentalControl().first()
-            dataMap["preferences"] = prefs
-
-            val gson = GsonBuilder().setPrettyPrinting().create()
-            val json = gson.toJson(dataMap)
-
-            val contentValues = ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, "ultrastream_backup.json")
-                put(MediaStore.MediaColumns.MIME_TYPE, "application/json")
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val data = buildExportData()
+            val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+            val json = moshi.adapter(ExportData::class.java).toJson(data)
+            val fileName = "ultrastream_backup_${System.currentTimeMillis()}.json"
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val resolver = context.contentResolver
+                val contentValues = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "application/json")
                     put(MediaStore.MediaColumns.RELATIVE_PATH, "Documents/UltraStream")
                 }
-            }
-            val resolver = context.contentResolver
-            val uri = resolver.insert(MediaStore.Files.getContentUri("external"), contentValues)
-            uri?.let {
-                resolver.openOutputStream(it)?.use { outputStream ->
-                    outputStream.write(json.toByteArray())
-                }
+                val uri = resolver.insert(MediaStore.Files.getContentUri("external"), contentValues)
+                uri?.let {
+                    resolver.openOutputStream(it)?.use { outputStream ->
+                        outputStream.write(json.toByteArray())
+                    }
+                    true
+                } ?: false
+            } else {
+                val file = File(context.getExternalFilesDir("backups"), fileName)
+                file.parentFile?.mkdirs()
+                file.writeText(json)
                 true
-            } ?: false
+            }
         } catch (e: Exception) {
-            e.printStackTrace()
             false
         }
     }
 
     suspend fun importData(context: Context, uri: Uri): Boolean {
         return try {
-            val resolver = context.contentResolver
-            val inputStream = resolver.openInputStream(uri) ?: return false
-            val gson = Gson()
-            val dataMap = gson.fromJson(inputStream.reader(), Map::class.java) as Map<String, Any>
-
-            // Restore addons
-            (dataMap["addons"] as? List<*>)?.let { list ->
-                val addons = gson.fromJson(gson.toJson(list), Array<com.ultrastream.app.data.models.Addon>::class.java).toList()
-                database.addonDao().insertAll(addons)
-            }
-            // Restore library
-            (dataMap["library"] as? List<*>)?.let { list ->
-                val items = gson.fromJson(gson.toJson(list), Array<com.ultrastream.app.data.models.LibraryItem>::class.java).toList()
-                database.libraryDao().insertAll(items)
-            }
-            // Restore watchlist
-            (dataMap["watchlist"] as? List<*>)?.let { list ->
-                val items = gson.fromJson(gson.toJson(list), Array<com.ultrastream.app.data.models.WatchlistItem>::class.java).toList()
-                database.watchlistDao().insertAll(items)
-            }
-            // Restore history
-            (dataMap["history"] as? List<*>)?.let { list ->
-                val items = gson.fromJson(gson.toJson(list), Array<com.ultrastream.app.data.models.HistoryItem>::class.java).toList()
-                database.historyDao().insertAll(items)
-            }
-            // Restore watched episodes
-            (dataMap["watchedEpisodes"] as? List<*>)?.let { list ->
-                val items = gson.fromJson(gson.toJson(list), Array<com.ultrastream.app.data.models.WatchedEpisode>::class.java).toList()
-                database.watchedEpisodeDao().insertAll(items)
-            }
-            // Restore watch progress
-            (dataMap["watchProgress"] as? List<*>)?.let { list ->
-                val items = gson.fromJson(gson.toJson(list), Array<com.ultrastream.app.data.models.WatchProgress>::class.java).toList()
-                database.watchProgressDao().insertAll(items)
-            }
-            // Restore smart playlists
-            (dataMap["smartPlaylists"] as? List<*>)?.let { list ->
-                val items = gson.fromJson(gson.toJson(list), Array<com.ultrastream.app.data.models.SmartPlaylist>::class.java).toList()
-                database.smartPlaylistDao().insertAll(items)
-            }
-            // Restore profiles
-            (dataMap["profiles"] as? List<*>)?.let { list ->
-                val items = gson.fromJson(gson.toJson(list), Array<com.ultrastream.app.data.models.Profile>::class.java).toList()
-                database.profileDao().insertAll(items)
-            }
-            // Restore cached meta
-            (dataMap["cachedMeta"] as? List<*>)?.let { list ->
-                val items = gson.fromJson(gson.toJson(list), Array<com.ultrastream.app.data.models.CachedMeta>::class.java).toList()
-                database.cachedMetaDao().insertAll(items)
-            }
-
-            // Restore preferences
-            (dataMap["preferences"] as? Map<String, Any>)?.let { prefs ->
-                prefs["theme"]?.let { preferencesManager.setTheme(it.toString()) }
-                prefs["debridKey"]?.let { preferencesManager.setDebridKey(it.toString()) }
-                prefs["currentProfile"]?.let { preferencesManager.setCurrentProfile(it.toString()) }
-                prefs["hindiPriority"]?.let { preferencesManager.setHindiPriority(it.toString().toBoolean()) }
-                prefs["autoPlayNext"]?.let { preferencesManager.setAutoPlayNext(it.toString().toBoolean()) }
-                prefs["parentalControl"]?.let { preferencesManager.setParentalControl(it.toString().toBoolean()) }
-            }
-
+            val inputStream: InputStream = context.contentResolver.openInputStream(uri) ?: return false
+            val json = inputStream.bufferedReader().use { it.readText() }
+            val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+            val data = moshi.adapter(ExportData::class.java).fromJson(json) ?: return false
+            libraryDao.deleteAll()
+            watchlistDao.deleteAll()
+            historyDao.deleteAll()
+            watchProgressDao.deleteAll()
+            addonDao.deleteAll()
+            profileDao.deleteAll()
+            libraryDao.insertAll(data.library)
+            watchlistDao.insertAll(data.watchlist)
+            historyDao.insertAll(data.history)
+            watchProgressDao.insertAll(data.watchProgress)
+            addonDao.insertAll(data.addons)
+            profileDao.insertAll(data.profiles)
             true
         } catch (e: Exception) {
-            e.printStackTrace()
             false
         }
     }
 
     suspend fun factoryReset(context: Context) {
-        // Clear all tables
-        database.addonDao().deleteAll()
-        database.libraryDao().deleteAll()
-        database.watchlistDao().deleteAll()
-        database.historyDao().deleteAll()
-        database.watchedEpisodeDao().deleteAll()
-        database.watchProgressDao().deleteAll()
-        database.smartPlaylistDao().deleteAll()
-        database.profileDao().deleteAll()
-        database.cachedMetaDao().deleteAll()
-
-        // Clear DataStore
+        libraryDao.deleteAll()
+        watchlistDao.deleteAll()
+        historyDao.deleteAll()
+        watchProgressDao.deleteAll()
+        addonDao.deleteAll()
+        profileDao.deleteAll()
         preferencesManager.clearAll()
+        _uiState.value = ProfileUiState()
+    }
+
+    private suspend fun buildExportData(): ExportData {
+        return ExportData(
+            library = libraryDao.getAll(),
+            watchlist = watchlistDao.getAll(),
+            history = historyDao.getAll(),
+            watchProgress = watchProgressDao.getAll(),
+            addons = addonDao.getAll(),
+            profiles = profileDao.getAll()
+        )
     }
 
     data class ProfileUiState(
@@ -5410,6 +5601,15 @@ class ProfileViewModel @Inject constructor(
         val autoPlayNext: Boolean = false,
         val parentalControl: Boolean = false,
         val currentProfile: String = "default"
+    )
+
+    data class ExportData(
+        val library: List<com.ultrastream.app.data.models.LibraryItem>,
+        val watchlist: List<com.ultrastream.app.data.models.WatchlistItem>,
+        val history: List<com.ultrastream.app.data.models.HistoryItem>,
+        val watchProgress: List<com.ultrastream.app.data.models.WatchProgress>,
+        val addons: List<com.ultrastream.app.data.models.Addon>,
+        val profiles: List<com.ultrastream.app.data.models.Profile>
     )
 }
 
@@ -5885,6 +6085,201 @@ fun SearchScreen(
                 }
             }
         }
+    }
+}
+
+```
+
+---
+
+## File: `app/src/main/java/com/ultrastream/app/ui/screens/details/DetailsScreen.kt`
+
+```kotlin
+@file:OptIn(ExperimentalMaterial3Api::class)
+
+package com.ultrastream.app.ui.screens.details
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.ultrastream.app.data.models.StreamItem
+import com.ultrastream.app.ui.components.bottomsheets.SeasonsSheet
+import com.ultrastream.app.ui.components.bottomsheets.StreamsSheet
+
+@Composable
+fun DetailsScreen(
+    id: String,
+    type: String,
+    viewModel: DetailsViewModel = hiltViewModel(),
+    onBack: () -> Unit,
+    onPlay: (stream: StreamItem, title: String) -> Unit
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    var showSeasonsSheet by remember { mutableStateOf(false) }
+    var showStreamsSheet by remember { mutableStateOf(false) }
+
+    val meta = uiState.meta
+
+    LaunchedEffect(id, type) {
+        viewModel.loadMeta(id, type)
+    }
+
+    LaunchedEffect(meta) {
+        if (meta?.type == "series" || meta?.type == "anime") {
+            val seasons = meta?.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: emptyList()
+            if (seasons.isNotEmpty() && uiState.selectedSeason == null) {
+                viewModel.selectSeason(seasons.first())
+            }
+        }
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp)
+    ) {
+        if (meta != null) {
+            item {
+                Text(meta.name, style = MaterialTheme.typography.headlineMedium)
+                if (meta.year != null) {
+                    Text(meta.year, style = MaterialTheme.typography.bodyMedium)
+                }
+                if (meta.imdbRating != null) {
+                    Text("⭐ ${meta.imdbRating}", style = MaterialTheme.typography.bodyMedium)
+                }
+                Text(meta.description ?: "", style = MaterialTheme.typography.bodyLarge)
+                Spacer(modifier = Modifier.height(8.dp))
+                Row {
+                    Button(
+                        onClick = { viewModel.toggleLibrary(meta) },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(if (uiState.inLibrary) "Remove from Library" else "Add to Library")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = { viewModel.toggleWatchlist(meta) },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(if (uiState.inWatchlist) "Remove from Watchlist" else "Add to Watchlist")
+                    }
+                }
+            }
+
+            if (meta.type == "series" || meta.type == "anime") {
+                val seasons = meta.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: emptyList()
+                val episodes = meta.videos
+                    ?.filter { it.season == uiState.selectedSeason }
+                    ?.sortedBy { it.episode } ?: emptyList()
+
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Season ${uiState.selectedSeason ?: ""}",
+                            style = MaterialTheme.typography.titleLarge
+                        )
+                        if (seasons.isNotEmpty()) {
+                            Button(onClick = { showSeasonsSheet = true }) {
+                                Text("Change Season")
+                            }
+                        }
+                    }
+                }
+                if (episodes.isNotEmpty()) {
+                    item {
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 80.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = PaddingValues(4.dp)
+                        ) {
+                            items(episodes) { video ->
+                                val epNum = video.episode ?: 0
+                                val isSelected = epNum == uiState.selectedEpisode
+                                Card(
+                                    modifier = Modifier
+                                        .padding(4.dp)
+                                        .fillMaxWidth()
+                                        .height(60.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (isSelected) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.surfaceVariant
+                                    ),
+                                    onClick = {
+                                        viewModel.selectEpisode(epNum)
+                                    }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = "E$epNum",
+                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                                            else MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            item {
+                Button(
+                    onClick = {
+                        viewModel.loadStreams(meta.id, meta.type, uiState.selectedSeason, uiState.selectedEpisode)
+                        showStreamsSheet = true
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (uiState.streamsLoading) "Loading..." else "Find Streams")
+                }
+            }
+        } else if (uiState.isLoading) {
+            item {
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            }
+        } else if (uiState.error != null) {
+            item {
+                Text("Error: ${uiState.error}", color = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+
+    if (showSeasonsSheet) {
+        val seasons = meta?.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: emptyList()
+        SeasonsSheet(
+            seasons = seasons,
+            currentSeason = uiState.selectedSeason ?: 0,
+            onDismiss = { showSeasonsSheet = false },
+            onSeasonSelected = { season ->
+                viewModel.selectSeason(season)
+                showSeasonsSheet = false
+            }
+        )
+    }
+
+    if (showStreamsSheet && uiState.streams.isNotEmpty()) {
+        StreamsSheet(
+            streams = uiState.streams,
+            onDismiss = { showStreamsSheet = false },
+            onStreamClick = { stream ->
+                showStreamsSheet = false
+                viewModel.playStream(stream, meta?.name ?: "Stream") { resolvedStream, title ->
+                    onPlay(resolvedStream, title)
+                }
+            }
+        )
     }
 }
 
@@ -7191,12 +7586,11 @@ interface StremioApi {
     suspend fun getStreams(@Url url: String): StreamResponse
 }
 
-// Response models
 data class ManifestResponse(
     val id: String,
     val name: String,
     val catalogs: List<Catalog>?,
-    val resources: List<Any>?, // FIXED: Changed to List<Any>? to handle both Strings and Objects without crashing
+    val resources: List<String>?,
     val types: List<String>?,
     val version: String?
 )
@@ -8217,11 +8611,8 @@ class AddonRepository @Inject constructor(
     private val catalogAdapter = moshi.adapter<List<Catalog>>(catalogListType)
 
     suspend fun installAddon(url: String): Addon? {
-        // FIXED: Handle | and spaces in URL safely
-        val safeUrl = url.trim().replace("|", "%7C").replace(" ", "%20")
-        
         val manifest = try {
-            stremioApi.getManifest(safeUrl)
+            stremioApi.getManifest(url)
         } catch (e: Exception) {
             return null
         }
@@ -8250,7 +8641,7 @@ class AddonRepository @Inject constructor(
         val catalogsJson = catalogAdapter.toJson(mappedCatalogs)
         val addon = Addon(
             id = manifest.id,
-            url = safeUrl, // FIXED: Saving safeUrl to database
+            url = url,
             name = manifest.name ?: manifest.id,
             catalogs = catalogsJson,
             enabled = true,
