@@ -38,14 +38,13 @@ class StreamRepository @Inject constructor(
             val deferred = addonUrls.map { url ->
                 async {
                     try {
-                        // Build base URL: remove trailing /manifest.json if present
+                        // Build base URL
                         var baseUrl = url
                         if (baseUrl.endsWith("/manifest.json")) {
                             baseUrl = baseUrl.substring(0, baseUrl.length - "/manifest.json".length)
                         } else if (baseUrl.endsWith("manifest.json")) {
                             baseUrl = baseUrl.substring(0, baseUrl.length - "manifest.json".length)
                         }
-                        // Remove trailing slash if any
                         if (baseUrl.endsWith("/")) {
                             baseUrl = baseUrl.substring(0, baseUrl.length - 1)
                         }
@@ -55,13 +54,11 @@ class StreamRepository @Inject constructor(
                         } else {
                             "$baseUrl/stream/$metaType/$metaId.json"
                         }
-                        // Apply debrid if present
                         val finalUrl = debridHelper.applyDebrid(fullUrl, debridKey)
                         val response = stremioApi.getStreams(finalUrl)
                         response.streams?.mapNotNull { stream ->
                             val addonName = extractAddonName(url)
                             val streamItem = convertStream(stream, addonName)
-                            // Episode matching (if season/episode provided)
                             if (season != null && episode != null) {
                                 if (!streamParser.isValidEpisode(streamItem, season, episode)) {
                                     return@mapNotNull null
@@ -76,7 +73,6 @@ class StreamRepository @Inject constructor(
             }
             val results = deferred.awaitAll()
             val all = results.flatten()
-            // Apply sorting and filtering
             streamParser.sortStreams(all, hindiPriority)
         }
     }
@@ -104,7 +100,6 @@ class StreamRepository @Inject constructor(
     }
 
     private fun extractAddonName(url: String): String {
-        // Simple extraction from URL
         val parts = url.split("/")
         return parts.getOrElse(2) { "addon" }
     }

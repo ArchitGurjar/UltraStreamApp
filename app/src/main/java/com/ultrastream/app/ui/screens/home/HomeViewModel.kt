@@ -1,5 +1,4 @@
 package com.ultrastream.app.ui.screens.home
-import kotlinx.coroutines.Deferred
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -19,7 +18,7 @@ import com.ultrastream.app.data.dao.WatchProgressDao
 import com.ultrastream.app.network.StremioApi
 import com.ultrastream.app.utils.buildAddonBaseUrl
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -65,7 +64,7 @@ class HomeViewModel @Inject constructor(
             val addons = addonRepository.getEnabledAddons()
             val catalogRows = ConcurrentHashMap<String, List<MetaItem>>()
 
-            val fetchJobs = mutableListOf<Job>()
+            val fetchJobs = mutableListOf<Deferred<Unit>>()
             for (addon in addons) {
                 try {
                     val catalogs = catalogAdapter.fromJson(addon.catalogs) ?: emptyList()
