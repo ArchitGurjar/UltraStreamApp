@@ -1,3 +1,4 @@
+@file:OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 package com.ultrastream.app.ui.components
 
 import androidx.compose.foundation.BorderStroke
@@ -45,7 +46,7 @@ fun StreamCard(
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
-                        text = "4KHDHub 4K", // Can be parsed dynamically from stream.name/title in real scenarios
+                        text = "4KHDHub 4K",
                         color = Color.Black,
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
@@ -68,7 +69,6 @@ fun StreamCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Extracted Tags (Mocked based on spec, can be passed via parser)
                 Tag(text = "2024", icon = Icons.Default.CalendarToday, color = AccentGold)
                 Tag(text = "Hindi", icon = Icons.Default.Translate, color = AccentOrange)
                 Tag(text = "18.74 GB", icon = Icons.Default.Storage, color = AccentOrange)

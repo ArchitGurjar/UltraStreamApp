@@ -1,16 +1,13 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package com.ultrastream.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -18,9 +15,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.ultrastream.app.data.models.Video
-import com.ultrastream.app.ui.theme.AccentGreen
-import com.ultrastream.app.ui.theme.CardDark
-import com.ultrastream.app.ui.theme.TextMuted
+import com.ultrastream.app.ui.theme.*
 
 @Composable
 fun EpisodeCard(
@@ -38,7 +33,6 @@ fun EpisodeCard(
         onClick = onClick
     ) {
         Row(modifier = Modifier.fillMaxSize()) {
-            // Thumbnail
             Box(
                 modifier = Modifier
                     .width(140.dp)
@@ -50,7 +44,6 @@ fun EpisodeCard(
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
-                // S01E01 Badge
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -65,7 +58,6 @@ fun EpisodeCard(
                         fontWeight = FontWeight.Bold
                     )
                 }
-                // Progress Bar
                 if (progressPercent > 0 && progressPercent < 100) {
                     Box(
                         modifier = Modifier
@@ -84,7 +76,6 @@ fun EpisodeCard(
                 }
             }
 
-            // Content
             Column(
                 modifier = Modifier
                     .fillMaxHeight()
