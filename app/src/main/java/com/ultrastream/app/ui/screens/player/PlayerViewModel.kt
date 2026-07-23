@@ -1,16 +1,17 @@
 package com.ultrastream.app.ui.screens.player
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
-import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.dash.DashMediaSource
+import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,7 +19,9 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class PlayerViewModel @Inject constructor() : ViewModel() {
+class PlayerViewModel @Inject constructor(
+    @ApplicationContext private val context: Context
+) : ViewModel() {
 
     private lateinit var exoPlayer: ExoPlayer
 
@@ -28,8 +31,8 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
     fun initializePlayer(url: String, title: String) {
         viewModelScope.launch {
             try {
-                val trackSelector = DefaultTrackSelector(android.content.ContextWrapper(null))
-                exoPlayer = ExoPlayer.Builder(androidx.media3.common.util.Util.getApplicationContext())
+                val trackSelector = DefaultTrackSelector(context)
+                exoPlayer = ExoPlayer.Builder(context)
                     .setTrackSelector(trackSelector)
                     .build()
 

@@ -4,8 +4,6 @@ import com.ultrastream.app.data.dao.AddonDao
 import com.ultrastream.app.data.models.Addon
 import com.ultrastream.app.data.models.Catalog
 import com.ultrastream.app.network.StremioApi
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -26,7 +24,24 @@ class AddonRepository @Inject constructor(
         val existing = addonDao.getById(manifest.id)
         if (existing != null) return existing
 
-        val catalogsJson = convertCatalogsToJson(manifest.catalogs ?: emptyList())
+        val netCatalogs = manifest.catalogs ?: emptyList()
+        val mappedCatalogs = netCatalogs.map { netCat ->
+            Catalog(
+                type = netCat.type,
+                id = netCat.id,
+                name = netCat.name,
+                extraSupported = netCat.extraSupported,
+                extra = netCat.extra?.map { 
+                    com.ultrastream.app.data.models.Extra(
+                        name = it.name,
+                        isRequired = it.isRequired,
+                        options = it.options
+                    )
+                }
+            )
+        }
+
+        val catalogsJson = mappedCatalogs.toString()
         val addon = Addon(
             id = manifest.id,
             url = url,
@@ -51,14 +66,5 @@ class AddonRepository @Inject constructor(
 
     suspend fun removeAddon(id: String) {
         addonDao.deleteById(id)
-    }
-
-    private fun convertCatalogsToJson(catalogs: List<Catalog>): String {
-        // Use Moshi or Gson, but for simplicity we'll use a simple JSON string
-        // Since we have Moshi in Converters, we can use that.
-        // For now, we'll use a placeholder. In real implementation, use Moshi.
-        // But to avoid dependency cycle, we'll use Moshi from network module.
-        // We'll create a utility function in a separate class.
-        return catalogs.toString() // Placeholder, will be properly serialized later
     }
 }
