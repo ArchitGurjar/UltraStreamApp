@@ -88,7 +88,8 @@ data class Stream(
     val name: String?,
     val description: String?,
     val infoHash: String?,
-    val subtitles: List<StreamSubtitle>?
+    val subtitles: List<StreamSubtitle>?,
+    val isLive: Boolean = false
 )
 
 data class StreamSubtitle(

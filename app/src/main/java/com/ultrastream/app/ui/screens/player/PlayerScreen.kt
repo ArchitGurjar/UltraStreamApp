@@ -4,17 +4,22 @@ import android.app.Activity
 import android.media.AudioManager
 import android.os.Build
 import android.view.ViewGroup
-import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Forward
+import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -27,17 +32,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.media3.ui.PlayerView
-import androidx.compose.ui.graphics.Color
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Replay
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Forward
-import androidx.compose.material.icons.filled.Fullscreen
 import com.ultrastream.app.data.models.StreamItem
-import com.ultrastream.app.ui.theme.LocalCustomColors
-import kotlinx.coroutines.delay
 
 @Composable
 fun PlayerScreen(
@@ -49,9 +44,7 @@ fun PlayerScreen(
     val context = LocalContext.current
     val view = LocalView.current
     val activity = context as? Activity
-    val customColors = LocalCustomColors.current
 
-    // Immersive mode
     DisposableEffect(Unit) {
         val window = activity?.window
         val insetsController = window?.let { WindowInsetsControllerCompat(it, view) }
@@ -83,7 +76,6 @@ fun PlayerScreen(
         }
     }
 
-    // Brightness
     LaunchedEffect(brightness) {
         activity?.window?.let { window ->
             val layoutParams = window.attributes
@@ -92,7 +84,6 @@ fun PlayerScreen(
         }
     }
 
-    // Volume
     LaunchedEffect(volume) {
         val audioManager = context.getSystemService(AudioManager::class.java)
         val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
@@ -100,7 +91,6 @@ fun PlayerScreen(
         audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0)
     }
 
-    // Lifecycle handling for PiP and background
     DisposableEffect(Unit) {
         val listener = LifecycleEventObserver { _, event ->
             when (event) {
@@ -125,9 +115,8 @@ fun PlayerScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(androidx.compose.ui.graphics.Color.Black)
+            .background(Color.Black)
     ) {
-        // PlayerView
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
@@ -145,20 +134,18 @@ fun PlayerScreen(
             }
         )
 
-        // Custom controls overlay
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            // Top bar
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
                     text = if (playerTitle.isNotEmpty()) playerTitle else title,
-                    color = androidx.compose.ui.graphics.Color.White,
+                    color = Color.White,
                     style = MaterialTheme.typography.titleMedium
                 )
                 Row {
@@ -166,14 +153,14 @@ fun PlayerScreen(
                         Icon(
                             imageVector = Icons.Default.PictureInPicture,
                             contentDescription = "Picture in Picture",
-                            tint = androidx.compose.ui.graphics.Color.White
+                            tint = Color.White
                         )
                     }
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = "Close",
-                            tint = androidx.compose.ui.graphics.Color.White
+                            tint = Color.White
                         )
                     }
                 }
@@ -181,7 +168,6 @@ fun PlayerScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // Progress
             val progress = if (duration > 0) (currentPosition.toFloat() / duration.toFloat()) else 0f
             LinearProgressIndicator(
                 progress = progress,
@@ -189,7 +175,7 @@ fun PlayerScreen(
                     .fillMaxWidth()
                     .height(6.dp),
                 color = MaterialTheme.colorScheme.primary,
-                trackColor = androidx.compose.ui.graphics.Color.Gray.copy(alpha = 0.3f)
+                trackColor = Color.Gray.copy(alpha = 0.3f)
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -197,40 +183,38 @@ fun PlayerScreen(
             ) {
                 Text(
                     text = formatTime(currentPosition),
-                    color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.7f),
+                    color = Color.White.copy(alpha = 0.7f),
                     style = MaterialTheme.typography.labelSmall
                 )
                 Text(
                     text = formatTime(duration),
-                    color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.7f),
+                    color = Color.White.copy(alpha = 0.7f),
                     style = MaterialTheme.typography.labelSmall
                 )
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Bottom controls
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 IconButton(onClick = { viewModel.skipBackward() }) {
-                    Icon(Icons.Default.Replay, contentDescription = "Back 10s", tint = androidx.compose.ui.graphics.Color.White)
+                    Icon(Icons.Default.Replay, contentDescription = "Back 10s", tint = Color.White)
                 }
                 IconButton(onClick = { viewModel.playPause() }) {
                     Icon(
                         if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = "Play/Pause",
-                        tint = androidx.compose.ui.graphics.Color.White
+                        tint = Color.White
                     )
                 }
                 IconButton(onClick = { viewModel.skipForward() }) {
-                    Icon(Icons.Default.Forward, contentDescription = "Forward 10s", tint = androidx.compose.ui.graphics.Color.White)
+                    Icon(Icons.Default.Forward, contentDescription = "Forward 10s", tint = Color.White)
                 }
             }
         }
 
-        // Gesture overlay
         Box(
             modifier = Modifier
                 .fillMaxSize()
