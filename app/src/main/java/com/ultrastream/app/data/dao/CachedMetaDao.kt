@@ -17,3 +17,6 @@ interface CachedMetaDao {
     @Query("DELETE FROM cached_meta")
     suspend fun deleteAll()
 }
+
+    @Query("DELETE FROM cached_meta")
+    suspend fun deleteAll()

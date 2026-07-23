@@ -21,3 +21,6 @@ interface ProfileDao {
     @Delete
     suspend fun delete(profile: Profile)
 }
+
+    @Query("DELETE FROM profiles")
+    suspend fun deleteAll()

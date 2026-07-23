@@ -27,3 +27,6 @@ interface SmartPlaylistDao {
     @Query("DELETE FROM smart_playlists")
     suspend fun deleteAll()
 }
+
+    @Query("DELETE FROM smart_playlists")
+    suspend fun deleteAll()

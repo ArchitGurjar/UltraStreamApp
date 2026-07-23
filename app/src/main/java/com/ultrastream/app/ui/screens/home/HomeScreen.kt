@@ -30,13 +30,22 @@ fun HomeScreen(
         // Continue Watching
         item {
             SectionHeader(title = "Continue Watching")
-            HScrollRow {
-                // For now dummy, later from history
-                Text("No history yet")
+            if (uiState.continueWatching.isEmpty()) {
+                Text("No history yet", modifier = Modifier.padding(horizontal = 16.dp))
+            } else {
+                HScrollRow {
+                    uiState.continueWatching.forEach { (history, progress) ->
+                        ContinueWatchingCard(
+                            history = history,
+                            progressPercent = progress,
+                            onClick = { onItemClick(history.id, history.type) }
+                        )
+                    }
+                }
             }
         }
 
-        // Catalogs from addons
+        // Catalog rows
         if (uiState.isLoading) {
             item {
                 Box(modifier = Modifier.fillParentMaxWidth(), contentAlignment = androidx.compose.ui.Alignment.Center) {
@@ -44,13 +53,26 @@ fun HomeScreen(
                 }
             }
         } else {
-            // For each addon/catalog, we'll show a row
-            // Since we don't have actual catalog data yet, we show placeholder
-            item {
-                SectionHeader(title = "Trending")
-                HScrollRow {
-                    repeat(10) {
-                        Text("Placeholder $it")
+            uiState.catalogRows.forEach { (rowId, items) ->
+                item {
+                    // Extract a nice name from rowId (e.g., addonId_type_id)
+                    val parts = rowId.split("_")
+                    val displayName = when {
+                        parts.size >= 3 -> "${parts[1].capitalize()}s"
+                        else -> "Catalog"
+                    }
+                    SectionHeader(title = displayName)
+                    if (items.isEmpty()) {
+                        Text("No items", modifier = Modifier.padding(horizontal = 16.dp))
+                    } else {
+                        HScrollRow {
+                            items.forEach { meta ->
+                                PosterCard(
+                                    meta = meta,
+                                    onClick = { onItemClick(meta.id, meta.type) }
+                                )
+                            }
+                        }
                     }
                 }
             }

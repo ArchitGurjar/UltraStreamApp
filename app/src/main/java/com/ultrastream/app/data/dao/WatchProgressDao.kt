@@ -40,3 +40,6 @@ interface WatchedEpisodeDao {
     @Query("DELETE FROM watched_episodes")
     suspend fun deleteAll()
 }
+
+    @Query("DELETE FROM watch_progress")
+    suspend fun deleteAll()

@@ -114,3 +114,9 @@ class PreferencesManager(private val context: Context) {
         }
     }
 }
+
+    suspend fun clearAll() {
+        context.dataStore.edit { preferences ->
+            preferences.clear()
+        }
+    }

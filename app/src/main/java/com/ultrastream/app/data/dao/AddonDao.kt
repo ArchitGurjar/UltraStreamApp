@@ -26,3 +26,6 @@ interface AddonDao {
     @Query("UPDATE addons SET enabled = :enabled WHERE id = :id")
     suspend fun updateEnabled(id: String, enabled: Boolean)
 }
+
+    @Query("DELETE FROM addons")
+    suspend fun deleteAll()
