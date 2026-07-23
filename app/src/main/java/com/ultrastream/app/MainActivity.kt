@@ -22,8 +22,12 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import dagger.hilt.android.AndroidEntryPoint
 import com.ultrastream.app.ui.navigation.Screen
+import com.ultrastream.app.ui.screens.addons.AddonsScreen
+import com.ultrastream.app.ui.screens.details.DetailsScreen
 import com.ultrastream.app.ui.screens.home.HomeScreen
 import com.ultrastream.app.ui.screens.library.LibraryScreen
+import com.ultrastream.app.ui.screens.profile.ProfileScreen
+import com.ultrastream.app.ui.screens.search.SearchScreen
 import com.ultrastream.app.ui.theme.UltraStreamTheme
 
 @AndroidEntryPoint
@@ -79,7 +83,6 @@ fun UltraStreamNavHost() {
         ) {
             composable(Screen.Home.route) {
                 HomeScreen { id, type ->
-                    // Navigate to details
                     navController.navigate(Screen.Details.pass(id, type))
                 }
             }
@@ -89,19 +92,33 @@ fun UltraStreamNavHost() {
                 }
             }
             composable(Screen.Search.route) {
-                Text("Search Screen")
+                SearchScreen { id, type ->
+                    navController.navigate(Screen.Details.pass(id, type))
+                }
             }
             composable(Screen.Addons.route) {
-                Text("Addons Screen")
+                AddonsScreen()
             }
             composable(Screen.Profile.route) {
-                Text("Profile Screen")
+                ProfileScreen()
             }
-            // Details and Player will be added later
             composable(Screen.Details.route) { backStackEntry ->
                 val id = backStackEntry.arguments?.getString("id") ?: ""
                 val type = backStackEntry.arguments?.getString("type") ?: ""
-                Text("Details for $id ($type)")
+                DetailsScreen(
+                    id = id,
+                    type = type,
+                    onBack = { navController.popBackStack() },
+                    onPlay = { url, title ->
+                        // Navigate to player
+                        navController.navigate(Screen.Player.pass(url))
+                    }
+                )
+            }
+            composable(Screen.Player.route) { backStackEntry ->
+                val url = backStackEntry.arguments?.getString("url") ?: ""
+                // Player screen will be added in Part 6
+                Text("Player for $url")
             }
         }
     }
