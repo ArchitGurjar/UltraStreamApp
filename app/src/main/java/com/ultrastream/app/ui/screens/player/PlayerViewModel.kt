@@ -9,6 +9,8 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackGroup
+import androidx.media3.common.Tracks
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -17,7 +19,7 @@ import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
-import com.ultrastream.app.data.models.StreamItem
+import androidx.media3.exoplayer.trackselection.TrackSelectionParameters
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -27,6 +29,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+data class AudioTrackInfo(val groupIndex: Int, val trackIndex: Int, val label: String, val language: String)
+data class SubtitleTrackInfo(val groupIndex: Int, val trackIndex: Int, val label: String, val language: String)
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor() : ViewModel() {
@@ -55,11 +60,22 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
     private val _volume = MutableStateFlow(1.0f)
     val volume: StateFlow<Float> = _volume.asStateFlow()
 
-    private val _brightness = MutableStateFlow(1.0f)
+    // Brightness starts at -1.0f (System Default) - Fixed Auto-Brightness Bug
+    private val _brightness = MutableStateFlow(-1.0f)
     val brightness: StateFlow<Float> = _brightness.asStateFlow()
+
+    private val _audioTracks = MutableStateFlow<List<AudioTrackInfo>>(emptyList())
+    val audioTracks: StateFlow<List<AudioTrackInfo>> = _audioTracks.asStateFlow()
+
+    private val _subtitleTracks = MutableStateFlow<List<SubtitleTrackInfo>>(emptyList())
+    val subtitleTracks: StateFlow<List<SubtitleTrackInfo>> = _subtitleTracks.asStateFlow()
+
+    private val _seekMessage = MutableStateFlow<String?>(null)
+    val seekMessage: StateFlow<String?> = _seekMessage.asStateFlow()
 
     private var playerListener: Player.Listener? = null
     private var positionJob: Job? = null
+    private var currentTrackSelectionParams: TrackSelectionParameters? = null
 
     fun initializePlayer(context: Context, stream: StreamItem, title: String) {
         viewModelScope.launch {
@@ -75,12 +91,15 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
                     .setTrackSelector(trackSelector)
                     .build()
 
+                // Initialize with system default track selection
+                currentTrackSelectionParams = TrackSelectionParameters.DEFAULT_WITH_CONTEXT(context)
+                exoPlayer.trackSelectionParameters = currentTrackSelectionParams!!
+
                 val dataSourceFactory = createDataSourceFactory()
                 val mediaItemBuilder = MediaItem.Builder()
                     .setUri(url)
                     .setMediaMetadata(MediaMetadata.Builder().setTitle(title).build())
 
-                // FIXED: Attach external subtitles safely using explicit MIME types and Uri.parse
                 stream.subtitles?.let { subs ->
                     val configs = subs.mapNotNull { subtitle ->
                         val subUriStr = subtitle.url ?: return@mapNotNull null
@@ -120,7 +139,6 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
                             Player.STATE_ENDED -> {
                                 _isPlaying.value = false
                             }
-                            else -> {}
                         }
                     }
 
@@ -130,6 +148,41 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
 
                     override fun onPlayerError(error: PlaybackException) {
                         _error.value = error.message
+                    }
+                    
+                    override fun onTracksChanged(tracks: Tracks) {
+                        val audioList = mutableListOf<AudioTrackInfo>()
+                        val subtitleList = mutableListOf<SubtitleTrackInfo>()
+
+                        tracks.groups.forEachIndexed { groupIndex, trackGroup ->
+                            if (trackGroup.type == C.TRACK_TYPE_AUDIO) {
+                                for (trackIndex in 0 until trackGroup.length) {
+                                    val format = trackGroup.getFormat(trackIndex)
+                                    audioList.add(
+                                        AudioTrackInfo(
+                                            groupIndex = groupIndex,
+                                            trackIndex = trackIndex,
+                                            label = format.label ?: format.language ?: "Audio $trackIndex",
+                                            language = format.language ?: "und"
+                                        )
+                                    )
+                                }
+                            } else if (trackGroup.type == C.TRACK_TYPE_TEXT) {
+                                for (trackIndex in 0 until trackGroup.length) {
+                                    val format = trackGroup.getFormat(trackIndex)
+                                    subtitleList.add(
+                                        SubtitleTrackInfo(
+                                            groupIndex = groupIndex,
+                                            trackIndex = trackIndex,
+                                            label = format.label ?: format.language ?: "Subtitle $trackIndex",
+                                            language = format.language ?: "und"
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                        _audioTracks.value = audioList
+                        _subtitleTracks.value = subtitleList
                     }
                 }
                 exoPlayer.addListener(listener)
@@ -207,6 +260,18 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
         }
     }
 
+    fun seekBy(offsetMs: Long) {
+        _player.value?.let { player ->
+            val newPos = player.currentPosition + offsetMs
+            player.seekTo(newPos.coerceIn(0, player.duration))
+            viewModelScope.launch {
+                _seekMessage.value = if (offsetMs > 0) "+${offsetMs/1000}s" else "-${-offsetMs/1000}s"
+                delay(800)
+                _seekMessage.value = null
+            }
+        }
+    }
+
     fun seekTo(position: Long) {
         _player.value?.seekTo(position.coerceIn(0, _duration.value))
     }
@@ -222,7 +287,33 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
     }
 
     fun setBrightness(brightness: Float) {
-        _brightness.value = brightness.coerceIn(0f, 1f)
+        _brightness.value = brightness.coerceIn(-1f, 1f)
+    }
+
+    fun selectAudioTrack(info: AudioTrackInfo) {
+        val trackGroup = _player.value?.trackInfo?.trackGroups?.get(info.groupIndex) ?: return
+        val params = currentTrackSelectionParams?.buildUpon()
+            ?.setTrackTypeSelectionOverride(C.TRACK_TYPE_AUDIO, trackGroup, info.trackIndex)
+            ?.build() ?: return
+        currentTrackSelectionParams = params
+        _player.value?.trackSelectionParameters = params
+    }
+
+    fun disableSubtitles() {
+        val params = currentTrackSelectionParams?.buildUpon()
+            ?.clearOverridesForType(C.TRACK_TYPE_TEXT)
+            ?.build() ?: return
+        currentTrackSelectionParams = params
+        _player.value?.trackSelectionParameters = params
+    }
+
+    fun selectSubtitleTrack(info: SubtitleTrackInfo) {
+        val trackGroup = _player.value?.trackInfo?.trackGroups?.get(info.groupIndex) ?: return
+        val params = currentTrackSelectionParams?.buildUpon()
+            ?.setTrackTypeSelectionOverride(C.TRACK_TYPE_TEXT, trackGroup, info.trackIndex)
+            ?.build() ?: return
+        currentTrackSelectionParams = params
+        _player.value?.trackSelectionParameters = params
     }
 
     fun releasePlayer() {
