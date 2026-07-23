@@ -3,7 +3,6 @@ package com.ultrastream.app.ui.screens.player
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
-import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -11,8 +10,6 @@ import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.dash.DashMediaSource
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
-import androidx.media3.exoplayer.trackselection.TrackSelector
-import androidx.media3.ui.PlayerView
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,12 +21,11 @@ import javax.inject.Inject
 class PlayerViewModel @Inject constructor() : ViewModel() {
 
     private lateinit var exoPlayer: ExoPlayer
-    private lateinit var playerView: PlayerView
 
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
 
-    fun initializePlayer(url: String, title: String, subtitles: List<String> = emptyList()) {
+    fun initializePlayer(url: String, title: String) {
         viewModelScope.launch {
             try {
                 val trackSelector = DefaultTrackSelector(android.content.ContextWrapper(null))
@@ -39,6 +35,7 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
 
                 val dataSourceFactory = DefaultHttpDataSource.Factory()
                 val mediaSource = createMediaSource(url, dataSourceFactory)
+                
                 exoPlayer.setMediaSource(mediaSource)
                 exoPlayer.prepare()
                 exoPlayer.playWhenReady = true
@@ -105,7 +102,9 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
     }
 
     fun releasePlayer() {
-        exoPlayer.release()
+        if (::exoPlayer.isInitialized) {
+            exoPlayer.release()
+        }
     }
 
     data class PlayerUiState(
@@ -118,5 +117,5 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
         val isFullscreen: Boolean = false,
         val isPiP: Boolean = false,
         val error: String? = null
-    }
+    )
 }

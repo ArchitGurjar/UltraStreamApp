@@ -30,6 +30,9 @@ import com.ultrastream.app.ui.screens.player.PlayerScreen
 import com.ultrastream.app.ui.screens.profile.ProfileScreen
 import com.ultrastream.app.ui.screens.search.SearchScreen
 import com.ultrastream.app.ui.theme.UltraStreamTheme
+import java.net.URLEncoder
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -111,12 +114,15 @@ fun UltraStreamNavHost() {
                     type = type,
                     onBack = { navController.popBackStack() },
                     onPlay = { url, title ->
-                        navController.navigate(Screen.Player.pass(url))
+                        // Encode URL to prevent navigation crash
+                        val encodedUrl = URLEncoder.encode(url, StandardCharsets.UTF_8.toString())
+                        navController.navigate(Screen.Player.pass(encodedUrl))
                     }
                 )
             }
             composable(Screen.Player.route) { backStackEntry ->
-                val url = backStackEntry.arguments?.getString("url") ?: ""
+                val encodedUrl = backStackEntry.arguments?.getString("url") ?: ""
+                val url = URLDecoder.decode(encodedUrl, StandardCharsets.UTF_8.toString())
                 PlayerScreen(url = url, title = "Now Playing")
             }
         }
