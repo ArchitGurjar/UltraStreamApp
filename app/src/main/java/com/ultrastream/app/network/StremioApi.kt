@@ -22,7 +22,7 @@ data class ManifestResponse(
     val id: String,
     val name: String,
     val catalogs: List<Catalog>?,
-    val resources: List<String>?,
+    val resources: List<Any>?, // FIXED: Changed to List<Any>? to handle both Strings and Objects without crashing
     val types: List<String>?,
     val version: String?
 )

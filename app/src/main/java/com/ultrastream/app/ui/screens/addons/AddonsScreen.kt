@@ -10,6 +10,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.launch
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 
 @Composable
 fun AddonsScreen(
@@ -17,6 +19,7 @@ fun AddonsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current // FIXED: Added proper context for UI Feedback
     var addonUrl by remember { mutableStateOf("") }
     var debridKey by remember { mutableStateOf(uiState.debridKey) }
 
@@ -38,8 +41,14 @@ fun AddonsScreen(
             Button(
                 onClick = {
                     scope.launch {
+                        // FIXED: Added proper UI Feedback without deleting any logic
                         val success = viewModel.installAddon(addonUrl)
-                        if (success) addonUrl = ""
+                        if (success) {
+                            addonUrl = ""
+                            Toast.makeText(context, "✅ Addon Installed Successfully!", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "❌ Install Failed: Invalid URL or Parsing Error.", Toast.LENGTH_LONG).show()
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
