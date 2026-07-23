@@ -7,6 +7,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.ultrastream.app.data.models.StreamItem
+import com.ultrastream.app.ui.components.bottomsheets.StreamsSheet
 
 @Composable
 fun DetailsScreen(
@@ -17,6 +19,8 @@ fun DetailsScreen(
     onPlay: (url: String, title: String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var showStreamsSheet by remember { mutableStateOf(false) }
+
     LaunchedEffect(id, type) {
         viewModel.loadMeta(id, type)
     }
@@ -39,18 +43,14 @@ fun DetailsScreen(
                 Spacer(modifier = Modifier.height(8.dp))
                 Row {
                     Button(
-                        onClick = {
-                            viewModel.toggleLibrary(meta)
-                        },
+                        onClick = { viewModel.toggleLibrary(meta) },
                         modifier = Modifier.weight(1f)
                     ) {
                         Text(if (uiState.inLibrary) "Remove from Library" else "Add to Library")
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
-                        onClick = {
-                            viewModel.toggleWatchlist(meta)
-                        },
+                        onClick = { viewModel.toggleWatchlist(meta) },
                         modifier = Modifier.weight(1f)
                     ) {
                         Text(if (uiState.inWatchlist) "Remove from Watchlist" else "Add to Watchlist")
@@ -59,21 +59,19 @@ fun DetailsScreen(
                 Spacer(modifier = Modifier.height(8.dp))
                 Button(
                     onClick = {
-                        // Load streams
+                        // Fetch streams and show sheet
                         viewModel.loadStreams(meta.id, meta.type)
-                        // For now, we just use a dummy URL
-                        onPlay("dummy_url", meta.name)
+                        showStreamsSheet = true
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Find Streams")
+                    Text(if (uiState.streamsLoading) "Loading..." else "Find Streams")
                 }
             }
             // Episodes if series
             if (meta.videos != null && meta.videos.isNotEmpty()) {
                 item {
                     Text("Episodes", style = MaterialTheme.typography.titleLarge)
-                    // We'll show a simple list for now
                     meta.videos?.forEach { video ->
                         Text("S${video.season}E${video.episode} - ${video.name ?: "Episode"}")
                     }
@@ -90,5 +88,20 @@ fun DetailsScreen(
                 Text("Error: ${uiState.error}", color = MaterialTheme.colorScheme.error)
             }
         }
+    }
+
+    // Streams bottom sheet
+    if (showStreamsSheet && uiState.streams.isNotEmpty()) {
+        StreamsSheet(
+            streams = uiState.streams,
+            onDismiss = { showStreamsSheet = false },
+            onStreamClick = { stream ->
+                val url = stream.url ?: stream.streamUrl ?: stream.externalUrl
+                if (!url.isNullOrBlank()) {
+                    showStreamsSheet = false
+                    onPlay(url, meta?.name ?: "Stream")
+                }
+            }
+        )
     }
 }

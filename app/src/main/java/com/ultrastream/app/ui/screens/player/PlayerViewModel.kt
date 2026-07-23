@@ -1,55 +1,117 @@
 package com.ultrastream.app.ui.screens.player
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.dash.DashMediaSource
 import androidx.media3.exoplayer.hls.HlsMediaSource
+import androidx.media3.exoplayer.dash.DashMediaSource
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class PlayerViewModel @Inject constructor(
-    @ApplicationContext private val context: Context
-) : ViewModel() {
+class PlayerViewModel @Inject constructor() : ViewModel() {
 
-    private lateinit var exoPlayer: ExoPlayer
+    private val _player = MutableStateFlow<ExoPlayer?>(null)
+    val player: StateFlow<ExoPlayer?> = _player.asStateFlow()
 
-    private val _uiState = MutableStateFlow(PlayerUiState())
-    val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
+    private val _currentPosition = MutableStateFlow(0L)
+    val currentPosition: StateFlow<Long> = _currentPosition.asStateFlow()
 
-    fun initializePlayer(url: String, title: String) {
+    private val _duration = MutableStateFlow(0L)
+    val duration: StateFlow<Long> = _duration.asStateFlow()
+
+    private val _isPlaying = MutableStateFlow(false)
+    val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
+
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
+    private val _title = MutableStateFlow("")
+    val title: StateFlow<String> = _title.asStateFlow()
+
+    private val _speed = MutableStateFlow(1.0f)
+    val speed: StateFlow<Float> = _speed.asStateFlow()
+
+    private val _volume = MutableStateFlow(1.0f)
+    val volume: StateFlow<Float> = _volume.asStateFlow()
+
+    private val _brightness = MutableStateFlow(1.0f)
+    val brightness: StateFlow<Float> = _brightness.asStateFlow()
+
+    private var playerListener: Player.Listener? = null
+
+    fun initializePlayer(context: Context, url: String, title: String) {
         viewModelScope.launch {
             try {
                 val trackSelector = DefaultTrackSelector(context)
-                exoPlayer = ExoPlayer.Builder(context)
+                val exoPlayer = ExoPlayer.Builder(context)
                     .setTrackSelector(trackSelector)
                     .build()
 
                 val dataSourceFactory = DefaultHttpDataSource.Factory()
                 val mediaSource = createMediaSource(url, dataSourceFactory)
-                
                 exoPlayer.setMediaSource(mediaSource)
                 exoPlayer.prepare()
                 exoPlayer.playWhenReady = true
 
-                _uiState.value = _uiState.value.copy(
-                    isPlaying = true,
-                    title = title,
-                    currentUrl = url
-                )
+                _player.value = exoPlayer
+                _title.value = title
+
+                // Listen to player events
+                val listener = object : Player.Listener {
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        when (playbackState) {
+                            Player.STATE_READY -> {
+                                _duration.value = exoPlayer.duration
+                                _isPlaying.value = exoPlayer.isPlaying
+                            }
+                            Player.STATE_ENDED -> {
+                                _isPlaying.value = false
+                            }
+                            Player.STATE_BUFFERING -> {
+                                // can show buffering indicator
+                            }
+                        }
+                    }
+
+                    override fun onIsPlayingChanged(isPlaying: Boolean) {
+                        _isPlaying.value = isPlaying
+                    }
+
+                    override fun onPlayerError(error: PlaybackException) {
+                        _error.value = error.message
+                    }
+
+                    override fun onVolumeChanged(volume: Float) {
+                        _volume.value = volume
+                    }
+                }
+                exoPlayer.addListener(listener)
+                playerListener = listener
+
+                // Start a periodic update of current position
+                viewModelScope.launch {
+                    while (true) {
+                        _currentPosition.value = exoPlayer.currentPosition
+                        kotlinx.coroutines.delay(200)
+                    }
+                }
+
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(error = e.message)
+                _error.value = e.message
             }
         }
     }
@@ -65,49 +127,54 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun playPause() {
-        if (exoPlayer.isPlaying) {
-            exoPlayer.pause()
-            _uiState.value = _uiState.value.copy(isPlaying = false)
-        } else {
-            exoPlayer.play()
-            _uiState.value = _uiState.value.copy(isPlaying = true)
+        _player.value?.let { player ->
+            if (player.isPlaying) {
+                player.pause()
+                _isPlaying.value = false
+            } else {
+                player.play()
+                _isPlaying.value = true
+            }
         }
     }
 
     fun skipForward(seconds: Long = 10) {
-        exoPlayer.seekTo(exoPlayer.currentPosition + seconds * 1000)
+        _player.value?.let { player ->
+            val newPos = player.currentPosition + seconds * 1000
+            player.seekTo(newPos.coerceAtMost(player.duration))
+        }
     }
 
     fun skipBackward(seconds: Long = 10) {
-        exoPlayer.seekTo(exoPlayer.currentPosition - seconds * 1000)
+        _player.value?.let { player ->
+            val newPos = player.currentPosition - seconds * 1000
+            player.seekTo(newPos.coerceAtLeast(0))
+        }
+    }
+
+    fun seekTo(position: Long) {
+        _player.value?.seekTo(position.coerceIn(0, _duration.value))
     }
 
     fun setSpeed(speed: Float) {
-        exoPlayer.setPlaybackSpeed(speed)
-        _uiState.value = _uiState.value.copy(speed = speed)
+        _player.value?.setPlaybackSpeed(speed)
+        _speed.value = speed
     }
 
     fun setVolume(volume: Float) {
-        exoPlayer.volume = volume.coerceIn(0f, 1f)
-        _uiState.value = _uiState.value.copy(volume = volume)
+        _player.value?.volume = volume.coerceIn(0f, 1f)
+        _volume.value = volume
     }
 
     fun setBrightness(brightness: Float) {
-        _uiState.value = _uiState.value.copy(brightness = brightness)
-    }
-
-    fun toggleFullscreen() {
-        _uiState.value = _uiState.value.copy(isFullscreen = !_uiState.value.isFullscreen)
-    }
-
-    fun togglePiP() {
-        _uiState.value = _uiState.value.copy(isPiP = !_uiState.value.isPiP)
+        _brightness.value = brightness.coerceIn(0f, 1f)
     }
 
     fun releasePlayer() {
-        if (::exoPlayer.isInitialized) {
-            exoPlayer.release()
-        }
+        _player.value?.removeListener(playerListener)
+        _player.value?.release()
+        _player.value = null
+        playerListener = null
     }
 
     data class PlayerUiState(
