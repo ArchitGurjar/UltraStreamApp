@@ -1,10 +1,10 @@
 package com.ultrastream.app.data.dao
 
 import androidx.room.Dao
+import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import androidx.room.Delete
 import com.ultrastream.app.data.models.WatchProgress
 import com.ultrastream.app.data.models.WatchedEpisode
 
