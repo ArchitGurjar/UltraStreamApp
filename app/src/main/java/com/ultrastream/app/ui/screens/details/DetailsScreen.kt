@@ -95,7 +95,7 @@ fun DetailsScreen(
                 val streamUrl = stream.url ?: stream.streamUrl ?: stream.externalUrl
                 if (!streamUrl.isNullOrBlank()) {
                     showStreamsSheet = false
-                    onPlay(streamUrl, meta?.name ?: "Stream")
+                    onPlay(streamUrl, uiState.meta?.name ?: "Stream")
                 }
             }
         )
