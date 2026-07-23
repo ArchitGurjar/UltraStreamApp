@@ -10,9 +10,12 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -52,7 +55,6 @@ fun PlayerScreen(
     val activity = context as? Activity
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // Player States
     val player by viewModel.player.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
     val duration by viewModel.duration.collectAsState()
@@ -63,18 +65,15 @@ fun PlayerScreen(
     val volume by viewModel.volume.collectAsState()
     val seekMessage by viewModel.seekMessage.collectAsState()
 
-    // UI State
     var resizeMode by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
     var isFullscreen by remember { mutableStateOf(false) }
     var showAudioSheet by remember { mutableStateOf(false) }
     var showSubtitleSheet by remember { mutableStateOf(false) }
 
-    // Init Player
     LaunchedEffect(stream) {
         viewModel.initializePlayer(context, stream, title)
     }
 
-    // Set Immersive Sticky on launch, cleanup on dispose
     DisposableEffect(Unit) {
         val window = activity?.window
         val insetsController = window?.let { WindowInsetsControllerCompat(it, view) }
@@ -88,7 +87,6 @@ fun PlayerScreen(
         }
     }
 
-    // Lifecycle handling
     DisposableEffect(lifecycleOwner) {
         val listener = LifecycleEventObserver { _, event ->
             when (event) {
@@ -109,7 +107,6 @@ fun PlayerScreen(
         }
     }
 
-    // Brightness Fix: Only apply if >= 0f, fallback to System Default (-1f)
     LaunchedEffect(brightness) {
         activity?.window?.let { window ->
             val layoutParams = window.attributes
@@ -118,7 +115,6 @@ fun PlayerScreen(
         }
     }
 
-    // Volume Sync
     LaunchedEffect(volume) {
         val audioManager = context.getSystemService(AudioManager::class.java)
         val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
@@ -131,7 +127,6 @@ fun PlayerScreen(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // Video Renderer
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
@@ -146,11 +141,10 @@ fun PlayerScreen(
             modifier = Modifier.fillMaxSize(),
             update = { playerView ->
                 playerView.player = player
-                playerView.resizeMode = resizeMode // Update Crop/Resize Mode
+                playerView.resizeMode = resizeMode
             }
         )
 
-        // Double-Tap Seek + Drag Gestures Overlay
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -170,11 +164,9 @@ fun PlayerScreen(
                             val width = size.width
                             val deltaX = dragAmount.x / width
                             if (change.position.x < width / 2) {
-                                // Left side: Brightness
                                 val newBrightness = (brightness + deltaX * 2).coerceIn(-1f, 1f)
                                 viewModel.setBrightness(newBrightness)
                             } else {
-                                // Right side: Volume
                                 val newVolume = (volume + deltaX * 2).coerceIn(0f, 1f)
                                 viewModel.setVolume(newVolume)
                             }
@@ -183,7 +175,6 @@ fun PlayerScreen(
                 }
         )
 
-        // Transient Seek Indicator
         if (seekMessage != null) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Surface(
@@ -202,13 +193,11 @@ fun PlayerScreen(
             }
         }
 
-        // UI Overlay (Controls)
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            // Top Bar (Title, Close, Audio, Subtitle)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -252,7 +241,6 @@ fun PlayerScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // Progress & Time
             val progress = if (duration > 0) (currentPosition.toFloat() / duration.toFloat()) else 0f
             LinearProgressIndicator(
                 progress = progress,
@@ -280,7 +268,6 @@ fun PlayerScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Bottom Controls
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly,
@@ -331,7 +318,6 @@ fun PlayerScreen(
             }
         }
 
-        // Error Overlay
         if (error != null) {
             Box(
                 modifier = Modifier
@@ -352,20 +338,19 @@ fun PlayerScreen(
         }
     }
 
-    // Bottom Sheets for Track Selection
     if (showAudioSheet) {
         ModalBottomSheet(
             onDismissRequest = { showAudioSheet = false }
         ) {
             val audioTracks by viewModel.audioTracks.collectAsState()
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Audio Tracks", style = MaterialTheme.typography.headlineSmall, color = Color.White)
+                Text("Audio Tracks", style = MaterialTheme.typography.headlineSmall)
                 Spacer(modifier = Modifier.height(8.dp))
                 LazyColumn {
                     items(audioTracks) { track ->
                         ListItem(
-                            headlineContent = { Text(track.label, color = Color.White) },
-                            supportingContent = { Text(track.language, color = Color.Gray) },
+                            headlineContent = { Text(track.label) },
+                            supportingContent = { Text(track.language) },
                             modifier = Modifier.clickable {
                                 viewModel.selectAudioTrack(track)
                                 showAudioSheet = false
@@ -383,12 +368,12 @@ fun PlayerScreen(
         ) {
             val subtitleTracks by viewModel.subtitleTracks.collectAsState()
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Subtitles", style = MaterialTheme.typography.headlineSmall, color = Color.White)
+                Text("Subtitles", style = MaterialTheme.typography.headlineSmall)
                 Spacer(modifier = Modifier.height(8.dp))
                 LazyColumn {
                     item {
                         ListItem(
-                            headlineContent = { Text("Off", color = Color.White) },
+                            headlineContent = { Text("Off") },
                             modifier = Modifier.clickable {
                                 viewModel.disableSubtitles()
                                 showSubtitleSheet = false
@@ -397,8 +382,8 @@ fun PlayerScreen(
                     }
                     items(subtitleTracks) { track ->
                         ListItem(
-                            headlineContent = { Text(track.label, color = Color.White) },
-                            supportingContent = { Text(track.language, color = Color.Gray) },
+                            headlineContent = { Text(track.label) },
+                            supportingContent = { Text(track.language) },
                             modifier = Modifier.clickable {
                                 viewModel.selectSubtitleTrack(track)
                                 showSubtitleSheet = false
