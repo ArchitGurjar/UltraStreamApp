@@ -1,0 +1,100 @@
+package com.ultrastream.app.data.repository
+
+import com.ultrastream.app.data.models.MetaItem
+import com.ultrastream.app.data.models.StreamItem
+import com.ultrastream.app.data.models.Subtitle
+import com.ultrastream.app.network.StremioApi
+import com.ultrastream.app.network.Stream
+import com.ultrastream.app.utils.DebridHelper
+import com.ultrastream.app.utils.StreamParser
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Singleton
+class StreamRepository @Inject constructor(
+    private val stremioApi: StremioApi,
+    private val debridHelper: DebridHelper,
+    private val streamParser: StreamParser
+) {
+
+    suspend fun getStreams(
+        metaId: String,
+        metaType: String,
+        season: Int? = null,
+        episode: Int? = null,
+        addonUrls: List<String>,
+        hindiPriority: Boolean,
+        debridKey: String?
+    ): List<StreamItem> {
+        val idWithExtra = if (season != null && episode != null) {
+            "$metaId:$season:$episode"
+        } else {
+            metaId
+        }
+
+        return coroutineScope {
+            val deferred = addonUrls.map { url ->
+                async {
+                    try {
+                        val base = url.replace("/manifest.json", "")
+                        val fullUrl = if (season != null && episode != null) {
+                            "$base/stream/$metaType/$metaId:$season:$episode.json"
+                        } else {
+                            "$base/stream/$metaType/$metaId.json"
+                        }
+                        // Apply debrid if present
+                        val finalUrl = debridHelper.applyDebrid(fullUrl, debridKey)
+                        val response = stremioApi.getStreams(finalUrl)
+                        response.streams?.mapNotNull { stream ->
+                            val addonName = extractAddonName(url)
+                            val streamItem = convertStream(stream, addonName)
+                            // Episode matching (if season/episode provided)
+                            if (season != null && episode != null) {
+                                if (!streamParser.isValidEpisode(streamItem, season, episode)) {
+                                    return@mapNotNull null
+                                }
+                            }
+                            streamItem
+                        } ?: emptyList()
+                    } catch (e: Exception) {
+                        emptyList()
+                    }
+                }
+            }
+            val results = deferred.awaitAll()
+            val all = results.flatten()
+            // Apply sorting and filtering
+            streamParser.sortStreams(all, hindiPriority)
+        }
+    }
+
+    private fun convertStream(stream: Stream, addonName: String): StreamItem {
+        return StreamItem(
+            url = stream.url,
+            streamUrl = stream.streamUrl,
+            externalUrl = stream.externalUrl,
+            title = stream.title,
+            name = stream.name,
+            description = stream.description,
+            infoHash = stream.infoHash,
+            addonName = addonName,
+            subtitles = stream.subtitles?.map {
+                Subtitle(
+                    url = it.url,
+                    file = it.file,
+                    lang = it.lang,
+                    name = it.name
+                )
+            },
+            isLive = stream.isLive
+        )
+    }
+
+    private fun extractAddonName(url: String): String {
+        // Simple extraction from URL
+        return url.split("/").getOrElse(2) { "addon" }.replace("manifest.json", "")
+    }
+}

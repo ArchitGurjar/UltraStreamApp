@@ -1,0 +1,113 @@
+package com.ultrastream.app.network
+
+import retrofit2.http.GET
+import retrofit2.http.Path
+import retrofit2.http.Query
+import retrofit2.http.Url
+
+interface StremioApi {
+    @GET
+    suspend fun getManifest(@Url url: String): ManifestResponse
+
+    @GET
+    suspend fun getCatalog(
+        @Path("type") type: String,
+        @Path("id") id: String,
+        @Query("search") search: String? = null
+    ): CatalogResponse
+
+    @GET
+    suspend fun getMeta(
+        @Path("type") type: String,
+        @Path("id") id: String
+    ): MetaResponse
+
+    @GET
+    suspend fun getStreams(
+        @Path("type") type: String,
+        @Path("id") id: String
+    ): StreamResponse
+}
+
+// Response models
+data class ManifestResponse(
+    val id: String,
+    val name: String,
+    val catalogs: List<Catalog>?,
+    val resources: List<String>?,
+    val types: List<String>?,
+    val version: String?
+)
+
+data class Catalog(
+    val type: String,
+    val id: String,
+    val name: String,
+    val extraSupported: List<String>? = null,
+    val extra: List<Extra>? = null
+)
+
+data class Extra(
+    val name: String,
+    val isRequired: Boolean = false,
+    val options: List<String>? = null
+)
+
+data class CatalogResponse(
+    val metas: List<Meta>? = emptyList()
+)
+
+data class MetaResponse(
+    val meta: Meta?
+)
+
+data class Meta(
+    val id: String,
+    val type: String,
+    val name: String,
+    val poster: String?,
+    val background: String?,
+    val imdbRating: String?,
+    val year: String?,
+    val releaseInfo: String?,
+    val released: String?,
+    val description: String?,
+    val genre: List<String>?,
+    val runtime: String?,
+    val cast: List<String>?,
+    val imdb_id: String?,
+    val videos: List<Video>? = null
+)
+
+data class Video(
+    val season: Int?,
+    val episode: Int?,
+    val name: String?,
+    val title: String?,
+    val description: String?,
+    val thumbnail: String?,
+    val url: String?
+)
+
+data class StreamResponse(
+    val streams: List<Stream>? = emptyList()
+)
+
+data class Stream(
+    val url: String?,
+    val streamUrl: String?,
+    val externalUrl: String?,
+    val title: String?,
+    val name: String?,
+    val description: String?,
+    val infoHash: String?,
+    val subtitles: List<Subtitle>?,
+    val isLive: Boolean = false
+)
+
+data class Subtitle(
+    val url: String?,
+    val file: String?,
+    val lang: String?,
+    val name: String?
+)
