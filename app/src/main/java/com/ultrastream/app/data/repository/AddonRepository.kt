@@ -1,8 +1,11 @@
 package com.ultrastream.app.data.repository
 
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
 import com.ultrastream.app.data.dao.AddonDao
 import com.ultrastream.app.data.models.Addon
 import com.ultrastream.app.data.models.Catalog
+import com.ultrastream.app.data.models.Extra
 import com.ultrastream.app.network.StremioApi
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -10,8 +13,12 @@ import javax.inject.Singleton
 @Singleton
 class AddonRepository @Inject constructor(
     private val addonDao: AddonDao,
-    private val stremioApi: StremioApi
+    private val stremioApi: StremioApi,
+    private val moshi: Moshi
 ) {
+
+    private val catalogListType = Types.newParameterizedType(List::class.java, Catalog::class.java)
+    private val catalogAdapter = moshi.adapter<List<Catalog>>(catalogListType)
 
     suspend fun installAddon(url: String): Addon? {
         val manifest = try {
@@ -31,8 +38,8 @@ class AddonRepository @Inject constructor(
                 id = netCat.id,
                 name = netCat.name,
                 extraSupported = netCat.extraSupported,
-                extra = netCat.extra?.map { 
-                    com.ultrastream.app.data.models.Extra(
+                extra = netCat.extra?.map {
+                    Extra(
                         name = it.name,
                         isRequired = it.isRequired,
                         options = it.options
@@ -41,7 +48,7 @@ class AddonRepository @Inject constructor(
             )
         }
 
-        val catalogsJson = mappedCatalogs.toString()
+        val catalogsJson = catalogAdapter.toJson(mappedCatalogs)
         val addon = Addon(
             id = manifest.id,
             url = url,

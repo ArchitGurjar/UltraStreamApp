@@ -23,15 +23,21 @@ class AddonsViewModel @Inject constructor(
 
     init {
         loadAddons()
+        observeDebridKey()
     }
 
     fun loadAddons() {
         viewModelScope.launch {
             val addons = addonRepository.getAllAddons()
-            val debridKey = preferencesManager.getDebridKey().collect { key ->
+            _uiState.value = _uiState.value.copy(addons = addons)
+        }
+    }
+
+    private fun observeDebridKey() {
+        viewModelScope.launch {
+            preferencesManager.getDebridKey().collect { key ->
                 _uiState.value = _uiState.value.copy(debridKey = key)
             }
-            _uiState.value = _uiState.value.copy(addons = addons)
         }
     }
 

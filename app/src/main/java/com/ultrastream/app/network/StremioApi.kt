@@ -1,8 +1,6 @@
 package com.ultrastream.app.network
 
 import retrofit2.http.GET
-import retrofit2.http.Path
-import retrofit2.http.Query
 import retrofit2.http.Url
 
 interface StremioApi {
@@ -10,23 +8,13 @@ interface StremioApi {
     suspend fun getManifest(@Url url: String): ManifestResponse
 
     @GET
-    suspend fun getCatalog(
-        @Path("type") type: String,
-        @Path("id") id: String,
-        @Query("search") search: String? = null
-    ): CatalogResponse
+    suspend fun getCatalog(@Url url: String): CatalogResponse
 
     @GET
-    suspend fun getMeta(
-        @Path("type") type: String,
-        @Path("id") id: String
-    ): MetaResponse
+    suspend fun getMeta(@Url url: String): MetaResponse
 
     @GET
-    suspend fun getStreams(
-        @Path("type") type: String,
-        @Path("id") id: String
-    ): StreamResponse
+    suspend fun getStreams(@Url url: String): StreamResponse
 }
 
 // Response models
@@ -101,11 +89,10 @@ data class Stream(
     val name: String?,
     val description: String?,
     val infoHash: String?,
-    val subtitles: List<Subtitle>?,
-    val isLive: Boolean = false
+    val subtitles: List<StreamSubtitle>?
 )
 
-data class Subtitle(
+data class StreamSubtitle(
     val url: String?,
     val file: String?,
     val lang: String?,

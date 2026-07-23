@@ -13,9 +13,12 @@ import androidx.media3.exoplayer.dash.DashMediaSource
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -50,6 +53,7 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
     val brightness: StateFlow<Float> = _brightness.asStateFlow()
 
     private var playerListener: Player.Listener? = null
+    private var positionJob: Job? = null
 
     fun initializePlayer(context: Context, url: String, title: String) {
         viewModelScope.launch {
@@ -93,10 +97,15 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
                 exoPlayer.addListener(listener)
                 playerListener = listener
 
-                viewModelScope.launch {
-                    while (true) {
-                        _currentPosition.value = exoPlayer.currentPosition
-                        kotlinx.coroutines.delay(200)
+                positionJob?.cancel()
+                positionJob = viewModelScope.launch {
+                    while (isActive) {
+                        try {
+                            _currentPosition.value = exoPlayer.currentPosition
+                        } catch (e: IllegalStateException) {
+                            break
+                        }
+                        delay(200)
                     }
                 }
 
@@ -161,6 +170,8 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
     }
 
     fun releasePlayer() {
+        positionJob?.cancel()
+        positionJob = null
         playerListener?.let { listener ->
             _player.value?.removeListener(listener)
         }

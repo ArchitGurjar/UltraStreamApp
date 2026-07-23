@@ -1,5 +1,7 @@
 package com.ultrastream.app.ui.navigation
 
+import java.net.URLEncoder
+
 sealed class Screen(val route: String) {
     object Home : Screen("home")
     object Library : Screen("library")
@@ -7,9 +9,10 @@ sealed class Screen(val route: String) {
     object Addons : Screen("addons")
     object Profile : Screen("profile")
     object Details : Screen("details/{id}/{type}") {
-        fun pass(id: String, type: String) = "details/$id/$type"
+        fun pass(id: String, type: String) =
+            "details/${URLEncoder.encode(id, "UTF-8")}/${URLEncoder.encode(type, "UTF-8")}"
     }
     object Player : Screen("player/{url}") {
-        fun pass(url: String) = "player/$url"
+        fun pass(url: String) = "player/${URLEncoder.encode(url, "UTF-8")}"
     }
 }

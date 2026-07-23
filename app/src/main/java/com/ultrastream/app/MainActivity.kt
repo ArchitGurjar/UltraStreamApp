@@ -21,6 +21,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import dagger.hilt.android.AndroidEntryPoint
+import java.net.URLDecoder
 import com.ultrastream.app.ui.navigation.Screen
 import com.ultrastream.app.ui.screens.addons.AddonsScreen
 import com.ultrastream.app.ui.screens.details.DetailsScreen
@@ -51,12 +52,12 @@ fun UltraStreamNavHost() {
             NavigationBar {
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentDestination = navBackStackEntry?.destination
-                val items = listOf(
-                    Screen.Home to "Home" to R.drawable.ic_home,
-                    Screen.Library to "Library" to R.drawable.ic_library,
-                    Screen.Search to "Search" to R.drawable.ic_search,
-                    Screen.Addons to "Addons" to R.drawable.ic_addon,
-                    Screen.Profile to "Profile" to R.drawable.ic_profile
+                                val items = listOf(
+                    Triple(Screen.Home, "Home", R.drawable.ic_home),
+                    Triple(Screen.Library, "Library", R.drawable.ic_library),
+                    Triple(Screen.Search, "Search", R.drawable.ic_search),
+                    Triple(Screen.Addons, "Addons", R.drawable.ic_addon),
+                    Triple(Screen.Profile, "Profile", R.drawable.ic_profile)
                 )
                 items.forEach { (screen, title, iconRes) ->
                     NavigationBarItem(
@@ -104,8 +105,8 @@ fun UltraStreamNavHost() {
                 ProfileScreen()
             }
             composable(Screen.Details.route) { backStackEntry ->
-                val id = backStackEntry.arguments?.getString("id") ?: ""
-                val type = backStackEntry.arguments?.getString("type") ?: ""
+                val id = URLDecoder.decode(backStackEntry.arguments?.getString("id") ?: "", "UTF-8")
+                val type = URLDecoder.decode(backStackEntry.arguments?.getString("type") ?: "", "UTF-8")
                 DetailsScreen(
                     id = id,
                     type = type,
@@ -116,7 +117,7 @@ fun UltraStreamNavHost() {
                 )
             }
             composable(Screen.Player.route) { backStackEntry ->
-                val url = backStackEntry.arguments?.getString("url") ?: ""
+                val url = URLDecoder.decode(backStackEntry.arguments?.getString("url") ?: "", "UTF-8")
                 PlayerScreen(
                     url = url,
                     title = "Now Playing",
