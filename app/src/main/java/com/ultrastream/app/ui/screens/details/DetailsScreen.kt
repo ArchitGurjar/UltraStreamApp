@@ -1,10 +1,8 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
-
 package com.ultrastream.app.ui.screens.details
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.*
@@ -17,6 +15,7 @@ import com.ultrastream.app.data.models.StreamItem
 import com.ultrastream.app.ui.components.bottomsheets.SeasonsSheet
 import com.ultrastream.app.ui.components.bottomsheets.StreamsSheet
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetailsScreen(
     id: String,
@@ -37,55 +36,68 @@ fun DetailsScreen(
 
     LaunchedEffect(meta) {
         if (meta?.type == "series" || meta?.type == "anime") {
-            val seasons = meta?.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: emptyList()
+            val seasons = meta.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: emptyList()
             if (seasons.isNotEmpty() && uiState.selectedSeason == null) {
                 viewModel.selectSeason(seasons.first())
             }
         }
     }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp)
-    ) {
-        if (meta != null) {
-            item {
-                Text(meta.name, style = MaterialTheme.typography.headlineMedium)
-                if (meta.year != null) {
-                    Text(meta.year, style = MaterialTheme.typography.bodyMedium)
-                }
-                if (meta.imdbRating != null) {
-                    Text("⭐ ${meta.imdbRating}", style = MaterialTheme.typography.bodyMedium)
-                }
-                Text(meta.description ?: "", style = MaterialTheme.typography.bodyLarge)
-                Spacer(modifier = Modifier.height(8.dp))
-                Row {
-                    Button(
-                        onClick = { viewModel.toggleLibrary(meta) },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(if (uiState.inLibrary) "Remove from Library" else "Add to Library")
+    if (meta != null) {
+        // 🚀 ADVANCED FIX: Using LazyVerticalGrid as the main root container!
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 80.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // 1. Header Section (Full Width Span)
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Column {
+                    Text(meta.name, style = MaterialTheme.typography.headlineMedium)
+                    if (meta.year != null) {
+                        Text(meta.year, style = MaterialTheme.typography.bodyMedium)
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(
-                        onClick = { viewModel.toggleWatchlist(meta) },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(if (uiState.inWatchlist) "Remove from Watchlist" else "Add to Watchlist")
+                    if (meta.imdbRating != null) {
+                        Text("⭐ ${meta.imdbRating}", style = MaterialTheme.typography.bodyMedium)
                     }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(meta.description ?: "", style = MaterialTheme.typography.bodyLarge)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = { viewModel.toggleLibrary(meta) },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(if (uiState.inLibrary) "Remove from Library" else "Add to Library")
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = { viewModel.toggleWatchlist(meta) },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(if (uiState.inWatchlist) "Remove from Watchlist" else "Add to Watchlist")
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
             }
 
+            // 2. Season Selector & Episodes Section
             if (meta.type == "series" || meta.type == "anime") {
                 val seasons = meta.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: emptyList()
                 val episodes = meta.videos
                     ?.filter { it.season == uiState.selectedSeason }
                     ?.sortedBy { it.episode } ?: emptyList()
 
-                item {
+                // Season Title & Button (Full Width Span)
+                item(span = { GridItemSpan(maxLineSpan) }) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
                             text = "Season ${uiState.selectedSeason ?: ""}",
@@ -98,67 +110,62 @@ fun DetailsScreen(
                         }
                     }
                 }
+
+                // Episode Cards (Grid Layout - Adaptive sizing)
                 if (episodes.isNotEmpty()) {
-                    item {
-                        LazyVerticalGrid(
-                            columns = GridCells.Adaptive(minSize = 80.dp),
-                            modifier = Modifier.fillMaxWidth(),
-                            contentPadding = PaddingValues(4.dp)
+                    items(episodes) { video ->
+                        val epNum = video.episode ?: 0
+                        val isSelected = epNum == uiState.selectedEpisode
+                        Card(
+                            modifier = Modifier.height(60.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.surfaceVariant
+                            ),
+                            onClick = {
+                                viewModel.selectEpisode(epNum)
+                            }
                         ) {
-                            items(episodes) { video ->
-                                val epNum = video.episode ?: 0
-                                val isSelected = epNum == uiState.selectedEpisode
-                                Card(
-                                    modifier = Modifier
-                                        .padding(4.dp)
-                                        .fillMaxWidth()
-                                        .height(60.dp),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = if (isSelected) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.surfaceVariant
-                                    ),
-                                    onClick = {
-                                        viewModel.selectEpisode(epNum)
-                                    }
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Text(
-                                            text = "E$epNum",
-                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary
-                                            else MaterialTheme.colorScheme.onSurface
-                                        )
-                                    }
-                                }
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Text(
+                                    text = "E$epNum",
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                                    else MaterialTheme.colorScheme.onSurface
+                                )
                             }
                         }
                     }
                 }
             }
 
-            item {
-                Button(
-                    onClick = {
-                        viewModel.loadStreams(meta.id, meta.type, uiState.selectedSeason, uiState.selectedEpisode)
-                        showStreamsSheet = true
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(if (uiState.streamsLoading) "Loading..." else "Find Streams")
+            // 3. Footer Section (Find Streams Button - Full Width Span)
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Column {
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Button(
+                        onClick = {
+                            viewModel.loadStreams(meta.id, meta.type, uiState.selectedSeason, uiState.selectedEpisode)
+                            showStreamsSheet = true
+                        },
+                        modifier = Modifier.fillMaxWidth().height(50.dp)
+                    ) {
+                        Text(if (uiState.streamsLoading) "Loading Streams..." else "Find Streams")
+                    }
+                    Spacer(modifier = Modifier.height(32.dp)) // Extra padding for bottom navigation
                 }
             }
-        } else if (uiState.isLoading) {
-            item {
-                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            }
-        } else if (uiState.error != null) {
-            item {
-                Text("Error: ${uiState.error}", color = MaterialTheme.colorScheme.error)
-            }
+        }
+    } else if (uiState.isLoading) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+    } else if (uiState.error != null) {
+        Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+            Text("Error: ${uiState.error}", color = MaterialTheme.colorScheme.error)
         }
     }
 
+    // Bottom Sheets
     if (showSeasonsSheet) {
         val seasons = meta?.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: emptyList()
         SeasonsSheet(
