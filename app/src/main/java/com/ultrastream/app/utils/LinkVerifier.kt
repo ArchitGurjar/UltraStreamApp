@@ -5,8 +5,6 @@ import okhttp3.Request
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 @Singleton
 class LinkVerifier @Inject constructor() {
@@ -14,37 +12,36 @@ class LinkVerifier @Inject constructor() {
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
-        .writeTimeout(15, TimeUnit.SECONDS)
         .build()
 
     suspend fun verifyLinkStatus(url: String?): Boolean {
-        if (url.isNullOrBlank() || url.startsWith("magnet:")) return false
-        return withContext(Dispatchers.IO) {
-            try {
-                val headRequest = Request.Builder()
-                    .url(url)
-                    .head()
-                    .addHeader("User-Agent", "UltraStream/1.0 (Android)")
-                    .build()
-                val headResponse = client.newCall(headRequest).execute()
-                if (headResponse.isSuccessful) {
-                    headResponse.close()
-                    return@withContext true
-                }
+        if (url.isNullOrBlank()) return false
+        // Use HEAD request with fallback to GET Range
+        try {
+            val headRequest = Request.Builder()
+                .url(url)
+                .head()
+                .build()
+            val headResponse = client.newCall(headRequest).execute()
+            if (headResponse.isSuccessful) {
                 headResponse.close()
-
+                return true
+            }
+            // If HEAD fails (e.g., 405), try GET with Range: bytes=0-0
+            if (headResponse.code == 405) {
                 val rangeRequest = Request.Builder()
                     .url(url)
                     .addHeader("Range", "bytes=0-0")
-                    .addHeader("User-Agent", "UltraStream/1.0 (Android)")
                     .build()
                 val rangeResponse = client.newCall(rangeRequest).execute()
-                val success = rangeResponse.isSuccessful && (rangeResponse.code == 200 || rangeResponse.code == 206)
+                val success = rangeResponse.isSuccessful || rangeResponse.code == 206
                 rangeResponse.close()
-                return@withContext success
-            } catch (e: Exception) {
-                false
+                return success
             }
+            headResponse.close()
+            return false
+        } catch (e: Exception) {
+            return false
         }
     }
 }

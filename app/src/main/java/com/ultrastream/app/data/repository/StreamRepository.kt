@@ -1,6 +1,7 @@
 package com.ultrastream.app.data.repository
 
 import com.ultrastream.app.data.models.StreamItem
+import com.ultrastream.app.utils.LinkVerifier
 import com.ultrastream.app.data.models.Subtitle
 import com.ultrastream.app.network.StremioApi
 import com.ultrastream.app.network.Stream

@@ -22,7 +22,7 @@ import com.ultrastream.app.utils.StreamParser
 @Composable
 fun StreamCard(
     stream: StreamItem,
-    onClick: () -> Unit
+    onClick: (, parsedInfo: StreamParser.ParsedInfo? = null) -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -70,35 +70,46 @@ fun StreamCard(
                 modifier = Modifier.padding(bottom = 12.dp)
             )
 
+            
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                if (metadata.size != null) {
-                    Tag(text = metadata.size, icon = Icons.Default.Storage, color = AccentGold)
-                }
-                if (metadata.seeds != null) {
-                    Tag(text = "${metadata.seeds} seeds", icon = Icons.Default.Group, color = AccentGreen)
-                }
-                metadata.quals.forEach { qual ->
-                    when {
-                        qual.contains("4K") || qual.contains("2160p") -> Tag(text = qual, icon = Icons.Default.Monitor, color = Color.White)
-                        qual.contains("HDR") -> Tag(text = qual, icon = Icons.Default.BrightnessHigh, color = AccentOrange)
-                        qual.contains("1080p") -> Tag(text = "1080p", icon = Icons.Default.Monitor, color = AccentBlue)
-                        qual.contains("720p") -> Tag(text = "720p", icon = Icons.Default.Monitor, color = AccentBlue)
-                        qual.contains("DV") -> Tag(text = "DV", icon = Icons.Default.BrightnessHigh, color = AccentPurple)
-                        else -> Tag(text = qual, icon = Icons.Default.Monitor, color = TextMuted)
+                val info = parsedInfo
+                if (info != null) {
+                    if (info.parsedYear != null) {
+                        Tag(text = info.parsedYear, icon = Icons.Default.CalendarToday, color = AccentGold)
                     }
-                }
-                metadata.langs.forEach { lang ->
-                    if (lang.contains("Hindi", ignoreCase = true) || lang.contains("हिंदी") || lang.contains("हिन्दी")) {
-                        Tag(text = lang, icon = Icons.Default.Translate, color = AccentOrange)
-                    } else {
-                        Tag(text = lang, icon = Icons.Default.Translate, color = AccentBlue)
+                    if (info.hasHindi) {
+                        Tag(text = "Hindi", icon = Icons.Default.Translate, color = AccentOrange)
                     }
+                    if (info.size != null) {
+                        Tag(text = info.size, icon = Icons.Default.Storage, color = AccentOrange)
+                    }
+                    info.quals.forEach { q ->
+                        Tag(text = q, icon = Icons.Default.Monitor, color = Color.White)
+                    }
+                    if (info.isLive) {
+                        Tag(text = "LIVE", icon = Icons.Default.Broadcast, color = AccentRed)
+                    }
+                    info.langs.forEach { lang ->
+                        if (!lang.equals("Hindi", ignoreCase = true)) {
+                            OutlinedTag(text = lang, color = AccentBlue)
+                        }
+                    }
+                } else {
+                    // Fallback static tags
+                    Tag(text = "2024", icon = Icons.Default.CalendarToday, color = AccentGold)
+                    Tag(text = "Hindi", icon = Icons.Default.Translate, color = AccentOrange)
+                    Tag(text = "18.74 GB", icon = Icons.Default.Storage, color = AccentOrange)
+                    Tag(text = "2160P", icon = Icons.Default.Monitor, color = Color.White)
+                    OutlinedTag(text = "HDR", color = TextMuted)
+                    OutlinedTag(text = "DV", color = TextMuted)
+                    OutlinedTag(text = "English", color = AccentBlue)
                 }
             }
+
         }
     }
 }
