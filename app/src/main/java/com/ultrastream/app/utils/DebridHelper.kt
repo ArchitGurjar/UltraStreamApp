@@ -2,6 +2,7 @@ package com.ultrastream.app.utils
 
 import com.ultrastream.app.network.AllDebridApi
 import com.ultrastream.app.network.PremiumizeApi
+import com.ultrastream.app.network.*
 import com.ultrastream.app.network.RealDebridApi
 import kotlinx.coroutines.delay
 import javax.inject.Inject
@@ -200,13 +201,3 @@ class DebridHelper @Inject constructor(
         return DebridStatus.ACTIVE
     }
 }
-
-// =========================== DATA CLASSES FOR APIS ===========================
-data class AllDebridUploadResponse(val status: Boolean, val id: String? = null, val message: String? = null)
-data class AllDebridStatusResponse(val status: String, val id: String? = null, val link: String? = null)
-data class AllDebridLinkResponse(val status: Boolean, val link: String? = null, val message: String? = null)
-
-data class PremiumizeTransferResponse(val status: Boolean, val id: String? = null, val message: String? = null)
-data class PremiumizeStatusResponse(val status: String, val id: String? = null, val message: String? = null)
-data class PremiumizeItemResponse(val status: Boolean, val content: List<PremiumizeContent>? = null, val message: String? = null)
-data class PremiumizeContent(val link: String, val name: String)
