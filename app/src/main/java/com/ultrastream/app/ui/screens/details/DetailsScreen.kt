@@ -139,7 +139,7 @@ fun DetailsScreen(
                                 ) {
                                     IconButton(onClick = { viewModel.toggleWatchlist(meta) }) {
                                         Icon(
-                                            imageVector = Icons.Default.Bookmark,
+                                            imageVector = Icons.Default.Favorite,
                                             contentDescription = "Watchlist",
                                             tint = if (uiState.inWatchlist) AccentBlue else Color.White
                                         )
@@ -152,7 +152,7 @@ fun DetailsScreen(
                                 ) {
                                     IconButton(onClick = { viewModel.toggleLibrary(meta) }) {
                                         Icon(
-                                            imageVector = if (uiState.inLibrary) Icons.Default.Bookmark else Icons.Outlined.BookmarkBorder,
+                                            imageVector = if (uiState.inLibrary) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                                             contentDescription = "Library",
                                             tint = if (uiState.inLibrary) AccentBlue else Color.White
                                         )
@@ -273,7 +273,7 @@ fun DetailsScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedButton(
                             onClick = {
-                                val imdbId = meta.imdbId ?: meta.imdb_id
+                                val imdbId = meta.imdbId ?: meta.imdbId
                                 if (!imdbId.isNullOrBlank()) {
                                     context.startActivity(
                                         Intent(Intent.ACTION_VIEW, Uri.parse("https://www.imdb.com/title/$imdbId"))

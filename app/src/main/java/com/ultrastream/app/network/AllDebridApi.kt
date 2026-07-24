@@ -23,3 +23,7 @@ interface AllDebridApi {
         @Query("id") id: String
     ): AllDebridLinkResponse
 }
+
+data class AllDebridUploadResponse(val status: Boolean, val id: String? = null, val message: String? = null)
+data class AllDebridStatusResponse(val status: String, val id: String? = null, val link: String? = null)
+data class AllDebridLinkResponse(val status: Boolean, val link: String? = null, val message: String? = null)

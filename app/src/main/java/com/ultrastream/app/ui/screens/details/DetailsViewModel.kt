@@ -110,14 +110,14 @@ class DetailsViewModel @Inject constructor(
             seasonMap.getOrPut(ep.season) { mutableListOf() }.add(ep)
         }
 
-        seasonMap.values.forEach { it.sortBy { it.episode } }
+        seasonMap.values.forEach { list -> list.sortBy { it.episode ?: 0 } }
         // Remove outliers (gaps > 20)
         seasonMap.values.forEach { seasonEpisodes ->
             if (seasonEpisodes.size > 1) {
-                var prev = seasonEpisodes[0].episode
+                var prev = seasonEpisodes[0].episode ?: 0
                 val toRemove = mutableListOf<Video>()
                 for (i in 1 until seasonEpisodes.size) {
-                    val current = seasonEpisodes[i].episode
+                    val current = seasonEpisodes[i].episode ?: 0
                     if (current > prev + 20) {
                         toRemove.add(seasonEpisodes[i])
                     }

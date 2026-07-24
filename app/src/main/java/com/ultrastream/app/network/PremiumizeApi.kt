@@ -23,3 +23,8 @@ interface PremiumizeApi {
         @Query("id") id: String
     ): PremiumizeItemResponse
 }
+
+data class PremiumizeTransferResponse(val status: Boolean, val id: String? = null, val message: String? = null)
+data class PremiumizeStatusResponse(val status: String, val id: String? = null, val message: String? = null)
+data class PremiumizeItemResponse(val status: Boolean, val content: List<PremiumizeContent>? = null, val message: String? = null)
+data class PremiumizeContent(val link: String, val name: String)
