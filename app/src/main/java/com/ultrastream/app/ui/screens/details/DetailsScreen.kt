@@ -59,8 +59,6 @@ fun DetailsScreen(
     var showActionSheet by remember { mutableStateOf(false) }
         var showSubtitlesSheet by remember { mutableStateOf(false) }
     var subtitlesList by remember { mutableStateOf<List<Subtitle>>(emptyList()) }
-    var showActionSheet by remember { mutableStateOf(false) }
-        var showSubtitlesSheet by remember { mutableStateOf(false) }
     var subtitlesList by remember { mutableStateOf<List<Subtitle>>(emptyList()) }
     var selectedStream by remember { mutableStateOf<StreamItem?>(null) }
 
@@ -432,42 +430,7 @@ fun DetailsScreen(
                 showActionSheet = true
             }
         )
-    }
-
-    // Action sheet for selected stream
-    if (showActionSheet && selectedStream != null) {
-        val stream = selectedStream!!
-        val title = meta?.name ?: "Stream"
-        ModalBottomSheet(
-            onDismissRequest = { showActionSheet = false }
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            ) {
-                Text(
-                    text = "Stream Options",
-                    style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-
-                // Play
-                Button(
-                    onClick = {
-                        showActionSheet = false
-                        viewModel.playStream(stream, title) { resolved, t ->
-                            onPlay(resolved, t)
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    ),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
+    } {
                     Icon(Icons.Default.PlayArrow, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Play in Default Player", fontWeight = FontWeight.Bold)
