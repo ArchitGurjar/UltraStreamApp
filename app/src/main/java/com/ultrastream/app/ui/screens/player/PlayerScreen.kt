@@ -41,6 +41,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.ultrastream.app.data.models.StreamItem
+import com.ultrastream.app.data.models.Subtitle
 import com.ultrastream.app.ui.theme.AccentBlue
 import kotlinx.coroutines.delay
 
@@ -49,6 +50,7 @@ fun PlayerScreen(
     stream: StreamItem,
     title: String = "Now Playing",
     viewModel: PlayerViewModel = hiltViewModel(),
+    externalSubtitle: Subtitle? = null,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -79,8 +81,8 @@ fun PlayerScreen(
     var resizeMode by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
 
     // Initialize player
-    LaunchedEffect(stream) {
-        viewModel.initializePlayer(context, stream, title)
+    LaunchedEffect(stream, externalSubtitle) {
+        viewModel.initializePlayer(context, stream, title, externalSubtitle)
     }
 
     // Lifecycle: pause on background, play on resume (unless locked)

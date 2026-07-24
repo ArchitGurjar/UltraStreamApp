@@ -100,7 +100,10 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
     private var playerListener: Player.Listener? = null
     private var positionJob: Job? = null
 
-    fun initializePlayer(context: Context, stream: StreamItem, title: String) {
+    fun initializePlayer(context: Context, stream: StreamItem, title: String, externalSubtitle: Subtitle? = null) {
+        currentContext = context
+        currentStream = stream
+        currentTitle = title
         viewModelScope.launch {
             try {
                 val url = stream.url ?: stream.streamUrl ?: stream.externalUrl
@@ -405,5 +408,20 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
     }
 
     private val _selectedSubtitleIndex = MutableStateFlow(-1)
+
+
+    private var currentContext: Context? = null
+    private var currentStream: StreamItem? = null
+    private var currentTitle: String? = null
+
+    fun addSubtitleAndRestart(subtitle: Subtitle?) {
+        val context = currentContext ?: return
+        val stream = currentStream ?: return
+        val title = currentTitle ?: return
+        // Release current player
+        releasePlayer()
+        // Reinitialize with new subtitle
+        initializePlayer(context, stream, title, subtitle)
+    }
 
 }

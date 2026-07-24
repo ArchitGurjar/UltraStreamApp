@@ -56,7 +56,11 @@ fun DetailsScreen(
     var showStreamsSheet by remember { mutableStateOf(false) }
         var selectedStream by remember { mutableStateOf<StreamItem?>(null) }
     var showActionSheet by remember { mutableStateOf(false) }
+        var showSubtitlesSheet by remember { mutableStateOf(false) }
+    var subtitlesList by remember { mutableStateOf<List<Subtitle>>(emptyList()) }
     var showActionSheet by remember { mutableStateOf(false) }
+        var showSubtitlesSheet by remember { mutableStateOf(false) }
+    var subtitlesList by remember { mutableStateOf<List<Subtitle>>(emptyList()) }
     var selectedStream by remember { mutableStateOf<StreamItem?>(null) }
 
     val meta = uiState.meta
@@ -498,7 +502,8 @@ fun DetailsScreen(
                                     uiState.selectedEpisode!!
                                 )
                                 if (subs.isNotEmpty()) {
-                                    Toast.makeText(context, "✅ ${subs.size} subtitles found!", Toast.LENGTH_SHORT).show()
+                                    subtitlesList = subs
+                                    showSubtitlesSheet = true
                                 } else {
                                     Toast.makeText(context, "No subtitles available", Toast.LENGTH_SHORT).show()
                                 }
@@ -663,7 +668,8 @@ fun DetailsScreen(
                                     uiState.selectedEpisode!!
                                 )
                                 if (subs.isNotEmpty()) {
-                                    Toast.makeText(context, "✅ ${subs.size} subtitles found!", Toast.LENGTH_SHORT).show()
+                                    subtitlesList = subs
+                                    showSubtitlesSheet = true
                                 } else {
                                     Toast.makeText(context, "No subtitles available", Toast.LENGTH_SHORT).show()
                                 }

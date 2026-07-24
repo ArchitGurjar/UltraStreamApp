@@ -40,6 +40,8 @@ class DetailsViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DetailsUiState())
+    private val _selectedSubtitle = MutableStateFlow<Subtitle?>(null)
+    val selectedSubtitle: StateFlow<Subtitle?> = _selectedSubtitle.asStateFlow()
     val uiState: StateFlow<DetailsUiState> = _uiState.asStateFlow()
 
     private var currentSeason: Int? = null
@@ -448,6 +450,11 @@ suspend fun createSmartPlaylist(meta: MetaItem, season: Int): Boolean {
         val selectedSeason: Int? = null,
         val selectedEpisode: Int? = null
     )
+
+    fun setSelectedSubtitle(subtitle: Subtitle) {
+        _selectedSubtitle.value = subtitle
+    }
+
 }
 
 fun MetaItem.toLibraryItem() = LibraryItem(
