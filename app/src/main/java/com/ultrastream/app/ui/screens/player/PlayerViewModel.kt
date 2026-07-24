@@ -1,5 +1,19 @@
 package com.ultrastream.app.ui.screens.player
 
+
+data class Quality(
+    val label: String,
+    val resolution: String? = null,
+    val bitrate: Int? = null
+)
+
+data class SubtitleTrack(
+    val index: Int,
+    val label: String,
+    val language: String
+)
+
+
 import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
@@ -54,7 +68,16 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
     val error: StateFlow<String?> = _error.asStateFlow()
 
     private val _title = MutableStateFlow("")
-    val title: StateFlow<String> = _title.asStateFlow()
+    private val _availableQualities = MutableStateFlow<List<Quality>>(emptyList())
+    val availableQualities: StateFlow<List<Quality>> = _availableQualities.asStateFlow()
+    private val _subtitleTracks = MutableStateFlow<List<SubtitleTrack>>(emptyList())
+    val subtitleTracks: StateFlow<List<SubtitleTrack>> = _subtitleTracks.asStateFlow()
+    private val _isLocked = MutableStateFlow(false)
+    val isLocked: StateFlow<Boolean> = _isLocked.asStateFlow()
+    private val _isFullscreen = MutableStateFlow(false)
+    val isFullscreen: StateFlow<Boolean> = _isFullscreen.asStateFlow()
+    private val _seekMessage = MutableStateFlow<String?>(null)
+    val seekMessage: StateFlow<String?> = _seekMessage.asStateFlow()    val title: StateFlow<String> = _title.asStateFlow()
 
     private val _speed = MutableStateFlow(1.0f)
     val speed: StateFlow<Float> = _speed.asStateFlow()
@@ -329,4 +352,58 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
         _player.value = null
         playerListener = null
     }
+
+    fun toggleLock() {
+        _isLocked.value = !_isLocked.value
+    }
+
+    fun toggleFullscreen() {
+        _isFullscreen.value = !_isFullscreen.value
+    }
+
+    fun seekBy(offsetMs: Long) {
+        _player.value?.let { player ->
+            val newPos = player.currentPosition + offsetMs
+            player.seekTo(newPos.coerceIn(0, player.duration))
+            viewModelScope.launch {
+                _seekMessage.value = if (offsetMs > 0) "+${offsetMs/1000}s" else "-${-offsetMs/1000}s"
+                delay(800)
+                _seekMessage.value = null
+            }
+        }
+    }
+
+    fun selectQuality(quality: Quality) {
+        // Implementation depends on track selection; we'll keep a placeholder.
+        // For actual quality switching, we need to map quality to track selection.
+        // This will be implemented in the listener.
+    }
+
+    fun selectSubtitle(track: SubtitleTrack) {
+        val player = _player.value ?: return
+        // Disable all text tracks first, then enable the selected one.
+        val params = player.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
+            .build()
+        player.trackSelectionParameters = params
+        // Use the track index to select.
+        // We'll store the selected track and apply in onTracksChanged.
+        // For now, we store it.
+        _selectedSubtitleIndex.value = track.index
+        // Apply selection by using TrackSelectionOverride.
+        // We need to get the actual track group.
+        // We'll implement in the listener.
+    }
+
+    fun disableSubtitles() {
+        val player = _player.value ?: return
+        val params = player.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
+            .build()
+        player.trackSelectionParameters = params
+        _selectedSubtitleIndex.value = -1
+    }
+
+    private val _selectedSubtitleIndex = MutableStateFlow(-1)
+
 }
