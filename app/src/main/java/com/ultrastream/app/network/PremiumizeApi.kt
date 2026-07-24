@@ -26,61 +26,61 @@ interface PremiumizeApi {
 }
 
 data class PremiumizeTransferResponse(
-    val status: String? = null,
-    val id: String? = null,
-    val name: String? = null,
-    val message: String? = null
+    val status: String = "",
+    val id: String = "",
+    val name: String = "",
+    val message: String = ""
 )
 
 data class PremiumizeStatusResponse(
-    val status: String? = null,
-    val message: String? = null,
-    val id: String? = null,
-    val transfers: List<PremiumizeTransferItem>? = null
+    val status: String = "",
+    val message: String = "",
+    val id: String = "",
+    val transfers: List<PremiumizeTransferItem> = emptyList()
 )
 
 data class PremiumizeTransferItem(
-    val id: String? = null,
-    val name: String? = null,
-    val status: String? = null,
-    val message: String? = null,
-    val progress: Double? = null,
-    val file_id: String? = null,
-    val folder_id: String? = null,
-    val size: Long? = null,
-    val created_at: String? = null,
-    val finished_at: String? = null,
-    val files: List<PremiumizeFileInfo>? = null
+    val id: String = "",
+    val name: String = "",
+    val status: String = "",
+    val message: String = "",
+    val progress: Double = 0.0,
+    val file_id: String = "",
+    val folder_id: String = "",
+    val size: Long = 0L,
+    val created_at: String = "",
+    val finished_at: String = "",
+    val files: List<PremiumizeFileInfo> = emptyList()
 )
 
 data class PremiumizeFileInfo(
-    val id: String? = null,
-    val name: String? = null,
-    val size: Long? = null,
-    val link: String? = null,
-    val stream_link: String? = null,
-    val type: String? = null,
-    val path: String? = null
+    val id: String = "",
+    val name: String = "",
+    val size: Long = 0L,
+    val link: String = "",
+    val stream_link: String = "",
+    val type: String = "",
+    val path: String = ""
 )
 
 data class PremiumizeItemResponse(
-    val status: String? = null,
-    val message: String? = null,
-    val id: String? = null,
-    val name: String? = null,
-    val type: String? = null,
-    val size: Long? = null,
-    val link: String? = null,
-    val stream_link: String? = null,
-    val content: List<PremiumizeContent>? = null
+    val status: String = "",
+    val message: String = "",
+    val id: String = "",
+    val name: String = "",
+    val type: String = "",
+    val size: Long = 0L,
+    val link: String = "",
+    val stream_link: String = "",
+    val content: List<PremiumizeContent> = emptyList()
 )
 
 data class PremiumizeContent(
-    val id: String? = null,
-    val name: String? = null,
-    val size: Long? = null,
-    val link: String? = null,
-    val stream_link: String? = null,
-    val type: String? = null,
-    val path: String? = null
+    val id: String = "",
+    val name: String = "",
+    val size: Long = 0L,
+    val link: String = "",
+    val stream_link: String = "",
+    val type: String = "",
+    val path: String = ""
 )

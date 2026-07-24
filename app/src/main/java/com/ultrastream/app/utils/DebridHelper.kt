@@ -1,11 +1,14 @@
 package com.ultrastream.app.utils
 
+import android.util.Log
 import com.ultrastream.app.network.AllDebridApi
 import com.ultrastream.app.network.PremiumizeApi
 import com.ultrastream.app.network.RealDebridApi
 import kotlinx.coroutines.delay
 import javax.inject.Inject
 import javax.inject.Singleton
+
+private const val TAG = "DebridHelper"
 
 @Singleton
 class DebridHelper @Inject constructor(
@@ -27,12 +30,20 @@ class DebridHelper @Inject constructor(
         debridKey: String?,
         provider: DebridProvider = DebridProvider.REAL_DEBRID
     ): String {
-        if (debridKey.isNullOrBlank()) return url
+        if (debridKey.isNullOrBlank()) {
+            Log.d(TAG, "No debrid key provided, returning original URL")
+            return url
+        }
 
-        return when (provider) {
-            DebridProvider.REAL_DEBRID -> resolveRealDebrid(url, debridKey)
-            DebridProvider.ALL_DEBRID -> resolveAllDebrid(url, debridKey)
-            DebridProvider.PREMIUMIZE -> resolvePremiumize(url, debridKey)
+        return try {
+            when (provider) {
+                DebridProvider.REAL_DEBRID -> resolveRealDebrid(url, debridKey)
+                DebridProvider.ALL_DEBRID -> resolveAllDebrid(url, debridKey)
+                DebridProvider.PREMIUMIZE -> resolvePremiumize(url, debridKey)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Debrid resolution failed for $provider: ${e.message}", e)
+            url
         }
     }
 
@@ -40,23 +51,24 @@ class DebridHelper @Inject constructor(
     private suspend fun resolveRealDebrid(url: String, apiKey: String): String {
         val auth = "Bearer $apiKey"
 
-        if (url.startsWith("magnet:")) {
-            return resolveRealDebridMagnet(url, auth)
-        }
-
-        if (url.matches(Regex("^[a-fA-F0-9]{40}$"))) {
+        return if (url.startsWith("magnet:")) {
+            resolveRealDebridMagnet(url, auth)
+        } else if (url.matches(Regex("^[a-fA-F0-9]{40}$"))) {
             val magnet = "magnet:?xt=urn:btih:$url"
-            return resolveRealDebridMagnet(magnet, auth)
+            resolveRealDebridMagnet(magnet, auth)
+        } else {
+            applyDebridParams(url, apiKey)
         }
-
-        return applyDebridParams(url, apiKey)
     }
 
     private suspend fun resolveRealDebridMagnet(magnet: String, auth: String): String {
         val hash = extractHash(magnet)
-        if (hash.isEmpty()) return magnet
+        if (hash.isEmpty()) {
+            Log.d(TAG, "No valid hash in magnet, returning original")
+            return magnet
+        }
 
-        try {
+        return try {
             val availability = realDebridApi.checkInstantAvailability(auth, hash)
             if (availability.isNotEmpty()) {
                 val cached = availability.values.firstOrNull { it.isNotEmpty() }
@@ -80,95 +92,118 @@ class DebridHelper @Inject constructor(
                     }
                 }
             }
-            return magnet
+            magnet
         } catch (e: Exception) {
-            return magnet
+            Log.e(TAG, "Real-Debrid magnet resolution failed: ${e.message}", e)
+            magnet
         }
     }
 
     // =========================== ALL-DEBRID ===========================
     private suspend fun resolveAllDebrid(url: String, apiKey: String): String {
-        if (url.startsWith("magnet:")) {
-            return resolveAllDebridMagnet(url, apiKey)
-        }
-        if (url.matches(Regex("^[a-fA-F0-9]{40}$"))) {
+        return if (url.startsWith("magnet:")) {
+            resolveAllDebridMagnet(url, apiKey)
+        } else if (url.matches(Regex("^[a-fA-F0-9]{40}$"))) {
             val magnet = "magnet:?xt=urn:btih:$url"
-            return resolveAllDebridMagnet(magnet, apiKey)
+            resolveAllDebridMagnet(magnet, apiKey)
+        } else {
+            applyDebridParams(url, apiKey)
         }
-        return applyDebridParams(url, apiKey)
     }
 
     private suspend fun resolveAllDebridMagnet(magnet: String, apiKey: String): String {
         val hash = extractHash(magnet)
-        if (hash.isEmpty()) return magnet
+        if (hash.isEmpty()) {
+            Log.d(TAG, "No valid hash in magnet, returning original")
+            return magnet
+        }
 
-        try {
+        return try {
             val uploadResponse = allDebridApi.uploadMagnet(apiKey, magnet)
-            if (uploadResponse.status != true || uploadResponse.data?.id == null) {
+            if (!uploadResponse.status || uploadResponse.data == null || uploadResponse.data.id.isEmpty()) {
+                Log.e(TAG, "AllDebrid upload failed: ${uploadResponse.message}")
                 return magnet
             }
             val torrentId = uploadResponse.data.id
 
             var statusResponse = allDebridApi.getMagnetStatus(apiKey, torrentId)
             var attempts = 0
-            while (statusResponse.data?.magnets?.firstOrNull()?.status != "Completed" && attempts < 60) {
+            while (attempts < 60) {
+                val magnets = statusResponse.data?.magnets ?: emptyList()
+                val first = magnets.firstOrNull()
+                if (first != null && first.status == "Completed") {
+                    break
+                }
                 delay(2000)
                 statusResponse = allDebridApi.getMagnetStatus(apiKey, torrentId)
                 attempts++
             }
+
             val magnetItem = statusResponse.data?.magnets?.firstOrNull()
-            if (magnetItem?.status == "Completed") {
+            if (magnetItem != null && magnetItem.status == "Completed") {
                 val linkResponse = allDebridApi.getMagnetLink(apiKey, torrentId)
-                if (linkResponse.status == true && linkResponse.data?.link != null) {
+                if (linkResponse.status && linkResponse.data != null && linkResponse.data.link.isNotEmpty()) {
                     return linkResponse.data.link
                 }
             }
-            return magnet
+            magnet
         } catch (e: Exception) {
-            return magnet
+            Log.e(TAG, "AllDebrid magnet resolution failed: ${e.message}", e)
+            magnet
         }
     }
 
     // =========================== PREMIUMIZE ===========================
     private suspend fun resolvePremiumize(url: String, apiKey: String): String {
-        if (url.startsWith("magnet:")) {
-            return resolvePremiumizeMagnet(url, apiKey)
-        }
-        if (url.matches(Regex("^[a-fA-F0-9]{40}$"))) {
+        return if (url.startsWith("magnet:")) {
+            resolvePremiumizeMagnet(url, apiKey)
+        } else if (url.matches(Regex("^[a-fA-F0-9]{40}$"))) {
             val magnet = "magnet:?xt=urn:btih:$url"
-            return resolvePremiumizeMagnet(magnet, apiKey)
+            resolvePremiumizeMagnet(magnet, apiKey)
+        } else {
+            applyDebridParams(url, apiKey)
         }
-        return applyDebridParams(url, apiKey)
     }
 
     private suspend fun resolvePremiumizeMagnet(magnet: String, apiKey: String): String {
         val hash = extractHash(magnet)
-        if (hash.isEmpty()) return magnet
+        if (hash.isEmpty()) {
+            Log.d(TAG, "No valid hash in magnet, returning original")
+            return magnet
+        }
 
-        try {
+        return try {
             val transferResponse = premiumizeApi.createTransfer(apiKey, magnet)
-            if (transferResponse.status != "success" || transferResponse.id == null) {
+            if (transferResponse.status != "success" || transferResponse.id.isEmpty()) {
+                Log.e(TAG, "Premiumize transfer creation failed: ${transferResponse.message}")
                 return magnet
             }
             val transferId = transferResponse.id
 
             var statusResponse = premiumizeApi.getTransferStatus(apiKey, transferId)
             var attempts = 0
-            while (statusResponse.transfers?.firstOrNull()?.status != "finished" && attempts < 60) {
+            while (attempts < 60) {
+                val transfers = statusResponse.transfers ?: emptyList()
+                val first = transfers.firstOrNull()
+                if (first != null && first.status == "finished") {
+                    break
+                }
                 delay(2000)
                 statusResponse = premiumizeApi.getTransferStatus(apiKey, transferId)
                 attempts++
             }
+
             val transferItem = statusResponse.transfers?.firstOrNull()
-            if (transferItem?.status == "finished") {
+            if (transferItem != null && transferItem.status == "finished") {
                 val itemResponse = premiumizeApi.getItemDetails(apiKey, transferId)
-                if (itemResponse.status == "success" && itemResponse.link != null) {
+                if (itemResponse.status == "success" && itemResponse.link.isNotEmpty()) {
                     return itemResponse.link
                 }
             }
-            return magnet
+            magnet
         } catch (e: Exception) {
-            return magnet
+            Log.e(TAG, "Premiumize magnet resolution failed: ${e.message}", e)
+            magnet
         }
     }
 
@@ -185,8 +220,10 @@ class DebridHelper @Inject constructor(
     }
 
     fun getDebridStatus(key: String): DebridStatus {
-        if (key.isBlank()) return DebridStatus.NOT_CONFIGURED
-        if (key.length < 20) return DebridStatus.INVALID
-        return DebridStatus.ACTIVE
+        return when {
+            key.isBlank() -> DebridStatus.NOT_CONFIGURED
+            key.length < 20 -> DebridStatus.INVALID
+            else -> DebridStatus.ACTIVE
+        }
     }
 }
