@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -27,6 +28,10 @@ fun ProfileScreen(
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var expandedRating by remember { mutableStateOf(false) }
+    var expandedLanguage by remember { mutableStateOf(false) }
+    var showNewProfileDialog by remember { mutableStateOf(false) }
+    var newProfileName by remember { mutableStateOf(\"\") }
     var expandedRating by remember { mutableStateOf(false) }
     var expandedLanguage by remember { mutableStateOf(false) }
     var showNewProfileDialog by remember { mutableStateOf(false) }

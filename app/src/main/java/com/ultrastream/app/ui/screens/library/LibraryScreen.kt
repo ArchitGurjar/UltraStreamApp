@@ -26,6 +26,8 @@ fun LibraryScreen(
     val uiState by viewModel.uiState.collectAsState()
     var selectedPlaylist by remember { mutableStateOf<SmartPlaylist?>(null) }
     var showPlaylistDetail by remember { mutableStateOf(false) }
+    var selectedPlaylist by remember { mutableStateOf<SmartPlaylist?>(null) }
+    var showPlaylistDetail by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
