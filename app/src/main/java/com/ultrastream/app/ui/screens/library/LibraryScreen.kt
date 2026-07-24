@@ -12,6 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.ultrastream.app.ui.components.GridSection
+import com.ultrastream.app.ui.components.SmartPlaylistCard
+import com.ultrastream.app.ui.components.HScrollRow
 import com.ultrastream.app.ui.components.SectionHeader
 import com.ultrastream.app.data.models.MetaItem
 
@@ -62,7 +64,27 @@ fun LibraryScreen(
                 }
             }
 
-            // Watchlist
+            
+        // Smart Playlists
+        item {
+            SectionHeader(title = "Smart Playlists")
+            if (uiState.smartPlaylists.isEmpty()) {
+                Text("No smart playlists", modifier = Modifier.padding(horizontal = 16.dp))
+            } else {
+                HScrollRow {
+                    uiState.smartPlaylists.forEach { playlist ->
+                        SmartPlaylistCard(
+                            playlist = playlist,
+                            onClick = { /* navigate to playlist detail */ },
+                            onExportM3u = { viewModel.exportPlaylistM3U(it) },
+                            onPlayAll = { viewModel.playAll(it) }
+                        )
+                    }
+                }
+            }
+        }
+        // Watchlist
+
             item {
                 SectionHeader(title = "Watchlist")
                 if (uiState.watchlist.isEmpty()) {

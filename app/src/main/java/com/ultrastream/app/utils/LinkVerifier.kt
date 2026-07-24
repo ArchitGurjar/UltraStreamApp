@@ -2,46 +2,51 @@ package com.ultrastream.app.utils
 
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Singleton
-class LinkVerifier @Inject constructor() {
+class LinkVerifier @Inject constructor(
+    private val okHttpClient: OkHttpClient
+) {
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .build()
-
-    suspend fun verifyLinkStatus(url: String?): Boolean {
-        if (url.isNullOrBlank()) return false
-        // Use HEAD request with fallback to GET Range
-        try {
-            val headRequest = Request.Builder()
-                .url(url)
-                .head()
-                .build()
-            val headResponse = client.newCall(headRequest).execute()
-            if (headResponse.isSuccessful) {
-                headResponse.close()
-                return true
-            }
-            // If HEAD fails (e.g., 405), try GET with Range: bytes=0-0
-            if (headResponse.code == 405) {
-                val rangeRequest = Request.Builder()
+    suspend fun verifyLink(url: String): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                val request = Request.Builder()
                     .url(url)
-                    .addHeader("Range", "bytes=0-0")
+                    .head()
+                    .addHeader("User-Agent", "UltraStream/1.0 (Android)")
+                    .addHeader("Referer", "https://ultrastream.app/")
                     .build()
-                val rangeResponse = client.newCall(rangeRequest).execute()
-                val success = rangeResponse.isSuccessful || rangeResponse.code == 206
-                rangeResponse.close()
-                return success
+                val response = okHttpClient.newCall(request).execute()
+                val isValid = response.code in 200..299
+                response.close()
+                isValid
+            } catch (e: Exception) {
+                false
             }
-            headResponse.close()
-            return false
-        } catch (e: Exception) {
-            return false
         }
+    }
+
+    suspend fun verifyM3ULinks(content: String): List<String> {
+        // Extract all URLs from M3U and verify them, return list of working URLs
+        // For simplicity, we'll just parse lines and check.
+        val lines = content.lines()
+        val workingLinks = mutableListOf<String>()
+        for (line in lines) {
+            val trimmed = line.trim()
+            if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+                if (verifyLink(trimmed)) {
+                    workingLinks.add(trimmed)
+                }
+            }
+        }
+        return workingLinks
     }
 }
