@@ -94,6 +94,13 @@ fun PlayerScreen(
         }
     }
 
+    // Listen for external subtitle selection events
+    LaunchedEffect(Unit) {
+        com.ultrastream.app.utils.SubtitleEvent.events.collect { subtitle ->
+            viewModel.addSubtitleAndRestart(subtitle)
+        }
+    }
+
     // Lifecycle: pause on background, play on resume (unless locked)
     DisposableEffect(lifecycleOwner) {
         val listener = LifecycleEventObserver { _, event ->

@@ -17,6 +17,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.launch
+import com.ultrastream.app.data.models.RecommendedAddon
+import com.ultrastream.app.ui.components.RecommendedAddonCard
+import com.ultrastream.app.ui.components.HScrollRow
 
 @Composable
 fun AddonsScreen(
@@ -69,6 +72,38 @@ fun AddonsScreen(
             ) {
                 Text("Install Addon")
             }
+        }
+
+        
+        // Recommended Addons
+        item {
+            Text("Recommended Addons", style = MaterialTheme.typography.titleMedium)
+            val recommended = listOf(
+                RecommendedAddon("Torrentio", "Torrent scraper", "https://torrentio.strem.fun/manifest.json"),
+                RecommendedAddon("Cinemeta", "Metadata provider", "https://cinemeta.strem.fun/manifest.json"),
+                RecommendedAddon("Juan Carlos 2", "4K sources", "https://juan-carlos.strem.fun/manifest.json"),
+                RecommendedAddon("Orion", "Premium scraper", "https://orion.strem.fun/manifest.json")
+            )
+            HScrollRow {
+                recommended.forEach { addon ->
+                    RecommendedAddonCard(
+                        addon = addon,
+                        onInstall = { url ->
+                            scope.launch {
+                                addonUrl = url
+                                val success = viewModel.installAddon(url)
+                                if (success) {
+                                    addonUrl = ""
+                                    Toast.makeText(context, "✅ Addon Installed!", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "❌ Install Failed", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
         }
 
         
