@@ -50,31 +50,19 @@ class PreferencesManager @Inject constructor(@ApplicationContext private val con
             preferences[THEME_KEY] = theme
         
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
     
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
@@ -84,31 +72,19 @@ class PreferencesManager @Inject constructor(@ApplicationContext private val con
             preferences[THEME_KEY] ?: "dark"
         
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
     
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
@@ -118,31 +94,19 @@ class PreferencesManager @Inject constructor(@ApplicationContext private val con
             preferences[DEBRID_KEY] = key
         
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
     
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
@@ -152,31 +116,19 @@ class PreferencesManager @Inject constructor(@ApplicationContext private val con
             preferences[DEBRID_KEY] ?: ""
         
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
     
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
@@ -186,31 +138,19 @@ class PreferencesManager @Inject constructor(@ApplicationContext private val con
             preferences[CURRENT_PROFILE_KEY] = profileId
         
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
     
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
@@ -220,31 +160,19 @@ class PreferencesManager @Inject constructor(@ApplicationContext private val con
             preferences[CURRENT_PROFILE_KEY] ?: "default"
         
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
     
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
@@ -254,31 +182,19 @@ class PreferencesManager @Inject constructor(@ApplicationContext private val con
             preferences[HINDI_PRIORITY_KEY] = enabled
         
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
     
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
@@ -288,31 +204,19 @@ class PreferencesManager @Inject constructor(@ApplicationContext private val con
             preferences[HINDI_PRIORITY_KEY] ?: true
         
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
     
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
@@ -322,31 +226,19 @@ class PreferencesManager @Inject constructor(@ApplicationContext private val con
             preferences[AUTO_PLAY_NEXT_KEY] = enabled
         
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
     
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
@@ -356,31 +248,19 @@ class PreferencesManager @Inject constructor(@ApplicationContext private val con
             preferences[AUTO_PLAY_NEXT_KEY] ?: false
         
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
     
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
@@ -390,31 +270,19 @@ class PreferencesManager @Inject constructor(@ApplicationContext private val con
             preferences[PARENTAL_CONTROL_KEY] = enabled
         
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
     
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
@@ -424,31 +292,19 @@ class PreferencesManager @Inject constructor(@ApplicationContext private val con
             preferences[PARENTAL_CONTROL_KEY] ?: false
         
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
     
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
@@ -458,31 +314,19 @@ class PreferencesManager @Inject constructor(@ApplicationContext private val con
             preferences[PARENTAL_RATING_KEY] = rating
         
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
     
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
@@ -492,31 +336,19 @@ class PreferencesManager @Inject constructor(@ApplicationContext private val con
             preferences[PARENTAL_RATING_KEY] ?: "PG-13"
         
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
     
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
@@ -526,46 +358,28 @@ class PreferencesManager @Inject constructor(@ApplicationContext private val con
             preferences.clear()
         
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
     
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 }
 
 
-    suspend fun setDebridProvider(provider: String) {
-        context.dataStore.edit { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] = provider
-        }
+    suspend 
     }
 
-    fun getDebridProvider(): Flow<String> {
-        return context.dataStore.data.map { preferences ->
-            preferences[DEBRID_PROVIDER_KEY] ?: "realdebrid"
-        }
+    
     }
 
 
