@@ -6,17 +6,15 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,7 +32,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.ultrastream.app.data.models.StreamItem
-import com.ultrastream.app.data.models.Video
+import com.ultrastream.app.ui.components.EpisodeCard
 import com.ultrastream.app.ui.components.bottomsheets.StreamsSheet
 import com.ultrastream.app.ui.theme.*
 import com.ultrastream.app.utils.M3UExporter
@@ -64,14 +62,15 @@ fun DetailsScreen(
     val availableSeasons by viewModel.availableSeasons.collectAsState()
     val selectedSeason by viewModel.selectedSeason.collectAsState()
     val isAllSeasons by viewModel.isAllSeasons.collectAsState()
+    val isSeries = meta?.type == "series" || meta?.type == "anime"
 
     LaunchedEffect(id, type) {
         viewModel.loadMeta(id, type)
     }
 
     LaunchedEffect(meta) {
-        if (meta?.type == "series" || meta?.type == "anime") {
-            val seasons = meta.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: emptyList()
+        if (isSeries) {
+            val seasons = meta?.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: emptyList()
             if (seasons.isNotEmpty() && uiState.selectedSeason == null) {
                 viewModel.selectSeasonAndLoad(seasons.first())
             }
@@ -80,16 +79,12 @@ fun DetailsScreen(
 
     Box(modifier = Modifier.fillMaxSize().background(BackgroundDark)) {
         if (meta != null) {
-            // ROOT: LazyVerticalGrid with adaptive columns
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 120.dp),
+            LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 80.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                contentPadding = PaddingValues(bottom = 80.dp)
             ) {
-                // 1. Hero Section (Full width)
-                item(span = { GridItemSpan(maxLineSpan) }) {
+                // ─── HERO SECTION ──────────────────────────────────────────────
+                item {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -116,6 +111,7 @@ fun DetailsScreen(
                                 )
                         )
 
+                        // Top bar with back and action buttons
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -139,7 +135,7 @@ fun DetailsScreen(
                                 ) {
                                     IconButton(onClick = { viewModel.toggleWatchlist(meta) }) {
                                         Icon(
-                                            imageVector = Icons.Default.Favorite,
+                                            imageVector = Icons.Default.Bookmark,
                                             contentDescription = "Watchlist",
                                             tint = if (uiState.inWatchlist) AccentBlue else Color.White
                                         )
@@ -152,7 +148,7 @@ fun DetailsScreen(
                                 ) {
                                     IconButton(onClick = { viewModel.toggleLibrary(meta) }) {
                                         Icon(
-                                            imageVector = if (uiState.inLibrary) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                            imageVector = if (uiState.inLibrary) Icons.Default.Bookmark else Icons.Outlined.BookmarkBorder,
                                             contentDescription = "Library",
                                             tint = if (uiState.inLibrary) AccentBlue else Color.White
                                         )
@@ -161,6 +157,7 @@ fun DetailsScreen(
                             }
                         }
 
+                        // Bottom content: type badge, title, meta, description, cast
                         Column(
                             modifier = Modifier
                                 .align(Alignment.BottomStart)
@@ -241,59 +238,61 @@ fun DetailsScreen(
                                     }
                                 }
                             }
-                        }
-                    }
-                }
+                            Spacer(modifier = Modifier.height(16.dp))
 
-                // 2. Find Streams Button (Full width)
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Button(
-                            onClick = {
-                                viewModel.loadStreams(
-                                    meta.id,
-                                    meta.type,
-                                    uiState.selectedSeason,
-                                    uiState.selectedEpisode
-                                )
-                                showStreamsSheet = true
-                            },
-                            modifier = Modifier.fillMaxWidth().height(56.dp),
-                            shape = RoundedCornerShape(50),
-                            colors = ButtonDefaults.buttonColors(containerColor = AccentBlue, contentColor = Color.Black)
-                        ) {
-                            Icon(Icons.Default.Satellite, contentDescription = null, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                if (uiState.streamsLoading) "Loading Streams..." else "Find Streams",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedButton(
-                            onClick = {
-                                val imdbId = meta.imdbId ?: meta.imdbId
-                                if (!imdbId.isNullOrBlank()) {
-                                    context.startActivity(
-                                        Intent(Intent.ACTION_VIEW, Uri.parse("https://www.imdb.com/title/$imdbId"))
+                            // ─── ACTION BUTTON (only for movies) ──────────────
+                            if (!isSeries) {
+                                Button(
+                                    onClick = {
+                                        viewModel.loadStreams(meta.id, meta.type, null, null)
+                                        showStreamsSheet = true
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(56.dp),
+                                    shape = RoundedCornerShape(50),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = AccentBlue,
+                                        contentColor = Color.Black
+                                    )
+                                ) {
+                                    Icon(Icons.Default.Satellite, contentDescription = null, modifier = Modifier.size(20.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        if (uiState.streamsLoading) "Loading Streams..." else "Find Streams",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp
                                     )
                                 }
-                            },
-                            modifier = Modifier.fillMaxWidth().height(48.dp),
-                            shape = RoundedCornerShape(50),
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
-                        ) {
-                            Icon(Icons.Default.Movie, contentDescription = null, tint = Color.White)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("View on IMDb", fontWeight = FontWeight.Bold, color = Color.White)
+                            }
+
+                            // IMDb link (always visible)
+                            OutlinedButton(
+                                onClick = {
+                                    val imdbId = meta.imdbId ?: meta.imdb_id
+                                    if (!imdbId.isNullOrBlank()) {
+                                        context.startActivity(
+                                            Intent(Intent.ACTION_VIEW, Uri.parse("https://www.imdb.com/title/$imdbId"))
+                                        )
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp),
+                                shape = RoundedCornerShape(50),
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
+                            ) {
+                                Icon(Icons.Default.Movie, contentDescription = null, tint = Color.White)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("View on IMDb", fontWeight = FontWeight.Bold, color = Color.White)
+                            }
                         }
                     }
                 }
 
-                // 3. Season selector (Full width)
-                if (meta.type == "series" || meta.type == "anime") {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
+                // ─── SERIES: SEASON SELECTOR CHIPS ───────────────────────────
+                if (isSeries) {
+                    item {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -326,66 +325,61 @@ fun DetailsScreen(
                         }
                     }
 
-                    // 4. Episode cards (Grid items, no span – adaptive columns)
+                    // ─── EPISODE CARDS (vertical list) ──────────────────────
                     items(filteredEpisodes) { video ->
                         val epNum = video.episode ?: 0
-                        val isSelected = epNum == uiState.selectedEpisode
+                        val seasonNum = video.season ?: 0
                         val isWatched = uiState.watchProgress?.percent?.let { it >= 100 } ?: false
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(80.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary
-                                else if (isWatched) MaterialTheme.colorScheme.secondaryContainer
-                                else MaterialTheme.colorScheme.surfaceVariant
-                            ),
+                        val progressPercent = uiState.watchProgress?.percent ?: 0
+
+                        EpisodeCard(
+                            video = video,
+                            isWatched = isWatched,
+                            progressPercent = progressPercent,
                             onClick = {
+                                // Load streams for this specific episode and show the streams sheet
                                 viewModel.selectEpisode(epNum)
-                                viewModel.loadStreams(
-                                    meta.id,
-                                    meta.type,
-                                    video.season,
-                                    epNum
-                                )
+                                viewModel.loadStreams(meta.id, meta.type, seasonNum, epNum)
                                 showStreamsSheet = true
                             }
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(
-                                        text = "E${epNum.toString().padStart(2, '0')}",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary
-                                        else MaterialTheme.colorScheme.onSurface
-                                    )
-                                    video.name?.let { name ->
-                                        Text(
-                                            text = name,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary
-                                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                    if (isWatched && !isSelected) {
-                                        Icon(
-                                            Icons.Default.CheckCircle,
-                                            contentDescription = "Watched",
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    // Spacer at bottom
+                    item {
+                        Spacer(modifier = Modifier.height(16.dp))
                     }
                 }
 
-                // 5. Footer spacer (Full width)
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    Spacer(modifier = Modifier.height(32.dp))
+                // ─── EMPTY / LOADING / ERROR STATES ──────────────────────────
+                if (uiState.isLoading) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillParentMaxWidth()
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = AccentBlue)
+                        }
+                    }
+                }
+                if (uiState.error != null) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillParentMaxWidth()
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Error: ${uiState.error}",
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
                 }
             }
 
@@ -400,7 +394,7 @@ fun DetailsScreen(
         }
     }
 
-    // Streams bottom sheet (old)
+    // ─── STREAMS BOTTOM SHEET ──────────────────────────────────────────────
     if (showStreamsSheet && uiState.streams.isNotEmpty()) {
         StreamsSheet(
             streams = uiState.streams,
@@ -413,7 +407,7 @@ fun DetailsScreen(
         )
     }
 
-    // New Stream Action Sheet
+    // ─── STREAM ACTION SHEET ───────────────────────────────────────────────
     if (showActionSheet && selectedStream != null) {
         val stream = selectedStream!!
         val title = meta?.name ?: "Stream"
@@ -454,11 +448,11 @@ fun DetailsScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Other actions in two-column grid
+                // Action grid
                 val actions = mutableListOf<Pair<String, () -> Unit>>()
 
-                // Smart Playlist (only if episode info)
-                if (uiState.selectedEpisode != null && uiState.selectedSeason != null && meta != null) {
+                // Smart Playlist (only if series and episode info)
+                if (uiState.selectedEpisode != null && uiState.selectedSeason != null && isSeries && meta != null) {
                     actions.add("Make Smart Playlist" to {
                         scope.launch {
                             val success = viewModel.createSmartPlaylist(meta, uiState.selectedSeason!!)
@@ -474,7 +468,7 @@ fun DetailsScreen(
                 actions.addAll(listOf(
                     "Search Subtitles" to {
                         scope.launch {
-                            if (uiState.selectedSeason != null && uiState.selectedEpisode != null && meta != null) {
+                            if (uiState.selectedSeason != null && uiState.selectedEpisode != null && isSeries && meta != null) {
                                 val subs = viewModel.fetchSubtitles(
                                     meta.id,
                                     meta.type,
