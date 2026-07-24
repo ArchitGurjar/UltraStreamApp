@@ -14,6 +14,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.ultrastream.app.ui.components.GridSection
 import com.ultrastream.app.ui.components.SmartPlaylistCard
 import com.ultrastream.app.ui.components.HScrollRow
+import com.ultrastream.app.ui.components.bottomsheets.SmartPlaylistDetailSheet
 import com.ultrastream.app.ui.components.SectionHeader
 import com.ultrastream.app.data.models.MetaItem
 
@@ -23,6 +24,8 @@ fun LibraryScreen(
     onItemClick: (id: String, type: String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var selectedPlaylist by remember { mutableStateOf<SmartPlaylist?>(null) }
+    var showPlaylistDetail by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -75,7 +78,10 @@ fun LibraryScreen(
                     uiState.smartPlaylists.forEach { playlist ->
                         SmartPlaylistCard(
                             playlist = playlist,
-                            onClick = { /* navigate to playlist detail */ },
+                            onClick = { 
+                                selectedPlaylist = playlist
+                                showPlaylistDetail = true
+                            },
                             onExportM3u = { viewModel.exportPlaylistM3U(it) },
                             onPlayAll = { viewModel.playAll(it) }
                         )
@@ -143,4 +149,31 @@ fun LibraryScreen(
             }
         }
     }
+
+    // Smart Playlist Detail Sheet
+    if (showPlaylistDetail && selectedPlaylist != null) {
+        val playlist = selectedPlaylist!!
+        // Fetch episodes from the playlist
+        val episodes = remember(playlist) {
+            viewModel.parsePlaylistEpisodes(playlist)
+        }
+        SmartPlaylistDetailSheet(
+            playlist = playlist,
+            episodes = episodes,
+            onDismiss = { showPlaylistDetail = false },
+            onRetryMissing = {
+                viewModel.retryMissingEpisodes(playlist)
+                showPlaylistDetail = false
+            },
+            onManualPick = { episode ->
+                // Open a stream picker (implement later)
+                // For now, we just show a toast
+                viewModel.manualPickEpisode(playlist, episode)
+            },
+            onPlayEpisode = { episode ->
+                viewModel.playEpisode(episode)
+            }
+        )
+    }
+
 }

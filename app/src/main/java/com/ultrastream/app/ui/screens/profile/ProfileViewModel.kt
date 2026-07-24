@@ -208,4 +208,37 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+
+    suspend fun setParentalRating(rating: String) {
+        preferencesManager.setParentalRating(rating)
+        _uiState.value = _uiState.value.copy(parentalRating = rating)
+    }
+
+    suspend fun setSubtitleLanguage(language: String) {
+        preferencesManager.setSubtitleLanguage(language)
+        _uiState.value = _uiState.value.copy(subtitleLanguage = language)
+    }
+
+    suspend fun switchProfile(profileId: String) {
+        preferencesManager.setCurrentProfile(profileId)
+        _uiState.value = _uiState.value.copy(currentProfile = profileId)
+        loadProfiles()
+    }
+
+    suspend fun createProfile(name: String) {
+        val id = name.lowercase().replace(" ", "_")
+        val profile = Profile(id = id, name = name, avatar = "")
+        profileDao.insert(profile)
+        loadProfiles()
+        // Optionally switch to the new profile
+        switchProfile(id)
+    }
+
+    private fun loadProfiles() {
+        viewModelScope.launch {
+            val profiles = profileDao.getAll()
+            _uiState.value = _uiState.value.copy(profiles = profiles)
+        }
+    }
+
 }
