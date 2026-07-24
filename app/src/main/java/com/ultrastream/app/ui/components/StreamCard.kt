@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ultrastream.app.data.models.StreamItem
 import com.ultrastream.app.ui.theme.*
+import com.ultrastream.app.utils.StreamParser
 
 @Composable
 fun StreamCard(
@@ -41,23 +42,28 @@ fun StreamCard(
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp
                 )
-                Surface(
-                    color = Color.White,
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text(
-                        text = "4KHDHub 4K",
-                        color = Color.Black,
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                    )
+                val metadata = StreamParser.parseMetadata((stream.title ?: "") + " " + (stream.name ?: "") + " " + (stream.description ?: ""))
+                if (metadata.isLive) {
+                    Surface(
+                        color = AccentRed.copy(alpha = 0.2f),
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, AccentRed.copy(alpha = 0.3f))
+                    ) {
+                        Text(
+                            text = "LIVE",
+                            color = AccentRed,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = stream.title ?: stream.name ?: "Stream",
+                text = metadata.cleanText,
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.White,
                 fontWeight = FontWeight.SemiBold,
@@ -69,14 +75,29 @@ fun StreamCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Tag(text = "2024", icon = Icons.Default.CalendarToday, color = AccentGold)
-                Tag(text = "Hindi", icon = Icons.Default.Translate, color = AccentOrange)
-                Tag(text = "18.74 GB", icon = Icons.Default.Storage, color = AccentOrange)
-                Tag(text = "2160P", icon = Icons.Default.Monitor, color = Color.White)
-                
-                OutlinedTag(text = "HDR", color = TextMuted)
-                OutlinedTag(text = "DV", color = TextMuted)
-                OutlinedTag(text = "English", color = AccentBlue)
+                if (metadata.size != null) {
+                    Tag(text = metadata.size, icon = Icons.Default.Storage, color = AccentGold)
+                }
+                if (metadata.seeds != null) {
+                    Tag(text = "${metadata.seeds} seeds", icon = Icons.Default.Group, color = AccentGreen)
+                }
+                metadata.quals.forEach { qual ->
+                    when {
+                        qual.contains("4K") || qual.contains("2160p") -> Tag(text = qual, icon = Icons.Default.Monitor, color = Color.White)
+                        qual.contains("HDR") -> Tag(text = qual, icon = Icons.Default.BrightnessHigh, color = AccentOrange)
+                        qual.contains("1080p") -> Tag(text = "1080p", icon = Icons.Default.Monitor, color = AccentBlue)
+                        qual.contains("720p") -> Tag(text = "720p", icon = Icons.Default.Monitor, color = AccentBlue)
+                        qual.contains("DV") -> Tag(text = "DV", icon = Icons.Default.BrightnessHigh, color = AccentPurple)
+                        else -> Tag(text = qual, icon = Icons.Default.Monitor, color = TextMuted)
+                    }
+                }
+                metadata.langs.forEach { lang ->
+                    if (lang.contains("Hindi", ignoreCase = true) || lang.contains("हिंदी") || lang.contains("हिन्दी")) {
+                        Tag(text = lang, icon = Icons.Default.Translate, color = AccentOrange)
+                    } else {
+                        Tag(text = lang, icon = Icons.Default.Translate, color = AccentBlue)
+                    }
+                }
             }
         }
     }

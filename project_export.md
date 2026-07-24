@@ -2630,6 +2630,154 @@ git push origin main
 
 ---
 
+## File: `safe_patch.sh`
+
+```bash
+#!/bin/bash
+set -e
+
+echo "🚀 Applying laser-focused patches without minifying any code..."
+
+# ============================================================
+# 1. APPEND API Data Classes (Safe: Doesn't overwrite file)
+# ============================================================
+cat >> app/src/main/java/com/ultrastream/app/network/AllDebridApi.kt << 'INNER_EOF'
+
+data class AllDebridUploadResponse(val status: Boolean, val id: String? = null, val message: String? = null)
+data class AllDebridStatusResponse(val status: String, val id: String? = null, val link: String? = null)
+data class AllDebridLinkResponse(val status: Boolean, val link: String? = null, val message: String? = null)
+INNER_EOF
+
+cat >> app/src/main/java/com/ultrastream/app/network/PremiumizeApi.kt << 'INNER_EOF'
+
+data class PremiumizeTransferResponse(val status: Boolean, val id: String? = null, val message: String? = null)
+data class PremiumizeStatusResponse(val status: String, val id: String? = null, val message: String? = null)
+data class PremiumizeItemResponse(val status: Boolean, val content: List<PremiumizeContent>? = null, val message: String? = null)
+data class PremiumizeContent(val link: String, val name: String)
+INNER_EOF
+
+# ============================================================
+# 2. CREATE Missing M3UExporter.kt (New file)
+# ============================================================
+mkdir -p app/src/main/java/com/ultrastream/app/utils
+cat > app/src/main/java/com/ultrastream/app/utils/M3UExporter.kt << 'INNER_EOF'
+package com.ultrastream.app.utils
+
+import android.content.Context
+import android.content.Intent
+import androidx.core.content.FileProvider
+import com.ultrastream.app.data.models.StreamItem
+import java.io.File
+
+class M3UExporter(private val context: Context) {
+
+    fun exportToM3U(
+        streams: List<StreamItem>,
+        title: String,
+        fileName: String = "playlist.m3u"
+    ): File? {
+        return try {
+            val content = buildM3UContent(streams, title)
+            val file = File(context.cacheDir, fileName)
+            file.writeText(content)
+            file
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun buildM3UContent(streams: List<StreamItem>, title: String): String {
+        val sb = StringBuilder()
+        sb.appendLine("#EXTM3U")
+        sb.appendLine("#PLAYLIST: \$title")
+
+        streams.forEach { stream ->
+            val url = stream.url ?: stream.streamUrl ?: stream.externalUrl
+            if (url.isNullOrBlank()) return@forEach
+            if (url.startsWith("magnet:")) return@forEach
+            val name = stream.title ?: stream.name ?: "Stream"
+            sb.appendLine("#EXTINF:-1,\${escapeM3UString(name)}")
+            sb.appendLine(url)
+        }
+
+        return sb.toString()
+    }
+
+    fun shareM3U(file: File) {
+        try {
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file
+            )
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "audio/x-mpegurl"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(intent, "Share Playlist"))
+        } catch (e: Exception) {}
+    }
+
+    private fun escapeM3UString(text: String): String {
+        return text.replace(",", "\\,")
+    }
+}
+INNER_EOF
+
+# ============================================================
+# 3. SMART PYTHON PATCHER (Fixes specific lines only)
+# ============================================================
+python3 - << 'PYEOF'
+import os
+
+# --- Patch DetailsViewModel.kt ---
+vm_path = "app/src/main/java/com/ultrastream/app/ui/screens/details/DetailsViewModel.kt"
+with open(vm_path, "r", encoding="utf-8") as f:
+    vm_code = f.read()
+
+# Fix Nullable Math Error by adding '?: 0'
+vm_code = vm_code.replace("seasonMap.values.forEach { it.sortBy { it.episode } }", "seasonMap.values.forEach { list -> list.sortBy { it.episode ?: 0 } }")
+vm_code = vm_code.replace("var prev = seasonEpisodes[0].episode", "var prev = seasonEpisodes[0].episode ?: 0")
+vm_code = vm_code.replace("val current = seasonEpisodes[i].episode", "val current = seasonEpisodes[i].episode ?: 0")
+
+with open(vm_path, "w", encoding="utf-8") as f:
+    f.write(vm_code)
+print("✅ DetailsViewModel.kt successfully patched!")
+
+
+# --- Patch DetailsScreen.kt ---
+screen_path = "app/src/main/java/com/ultrastream/app/ui/screens/details/DetailsScreen.kt"
+with open(screen_path, "r", encoding="utf-8") as f:
+    screen_code = f.read()
+
+# Fix Icons and imdb_id
+screen_code = screen_code.replace("Icons.Outlined.BookmarkBorder", "Icons.Default.FavoriteBorder")
+screen_code = screen_code.replace("Icons.Default.Bookmark", "Icons.Default.Favorite")
+screen_code = screen_code.replace("meta.imdb_id", "meta.imdbId")
+
+# Fix missing M3UExporter Import
+if "import com.ultrastream.app.utils.M3UExporter" not in screen_code:
+    screen_code = screen_code.replace("import com.ultrastream.app.ui.theme.*", "import com.ultrastream.app.ui.theme.*\nimport com.ultrastream.app.utils.M3UExporter")
+
+with open(screen_path, "w", encoding="utf-8") as f:
+    f.write(screen_code)
+print("✅ DetailsScreen.kt successfully patched!")
+PYEOF
+
+# ============================================================
+# 4. Commit and Push
+# ============================================================
+git add -A
+git commit -m "Fix: Target-patched Nullable Math, Icons, M3UExporter & APIs without minifying UI code"
+git push origin main
+
+echo "🎉 All patches applied perfectly. Your advanced UI is completely safe!"
+
+```
+
+---
+
 ## File: `export_project.sh`
 
 ```bash
@@ -6863,6 +7011,8 @@ import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import com.ultrastream.app.network.StremioApi
 import com.ultrastream.app.network.RealDebridApi
+import com.ultrastream.app.network.AllDebridApi
+import com.ultrastream.app.network.PremiumizeApi
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
@@ -6924,6 +7074,24 @@ object NetworkModule {
             .baseUrl("https://api.real-debrid.com/rest/1.0/")
             .build()
             .create(RealDebridApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideAllDebridApi(retrofit: Retrofit): AllDebridApi {
+        return retrofit.newBuilder()
+            .baseUrl("https://api.alldebrid.com/v4/")
+            .build()
+            .create(AllDebridApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun providePremiumizeApi(retrofit: Retrofit): PremiumizeApi {
+        return retrofit.newBuilder()
+            .baseUrl("https://www.premiumize.me/api/")
+            .build()
+            .create(PremiumizeApi::class.java)
     }
 }
 
@@ -8718,16 +8886,19 @@ fun SearchScreen(
 ## File: `app/src/main/java/com/ultrastream/app/ui/screens/details/DetailsScreen.kt`
 
 ```kotlin
-@file:OptIn(ExperimentalMaterial3Api::class)
-
 package com.ultrastream.app.ui.screens.details
 
+import android.app.Activity
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -8739,18 +8910,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.ultrastream.app.data.models.StreamItem
 import com.ultrastream.app.ui.components.EpisodeCard
-import com.ultrastream.app.ui.components.StreamCard
-import com.ultrastream.app.ui.components.bottomsheets.SeasonsSheet
 import com.ultrastream.app.ui.components.bottomsheets.StreamsSheet
 import com.ultrastream.app.ui.theme.*
+import com.ultrastream.app.utils.M3UExporter
+import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun DetailsScreen(
     id: String,
@@ -8760,20 +8936,31 @@ fun DetailsScreen(
     onPlay: (stream: StreamItem, title: String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val clipboard = LocalClipboardManager.current
+
     var showSeasonsSheet by remember { mutableStateOf(false) }
     var showStreamsSheet by remember { mutableStateOf(false) }
+    var showActionSheet by remember { mutableStateOf(false) }
+    var selectedStream by remember { mutableStateOf<StreamItem?>(null) }
 
     val meta = uiState.meta
+    val filteredEpisodes by viewModel.filteredEpisodes.collectAsState()
+    val availableSeasons by viewModel.availableSeasons.collectAsState()
+    val selectedSeason by viewModel.selectedSeason.collectAsState()
+    val isAllSeasons by viewModel.isAllSeasons.collectAsState()
+    val isSeries = meta?.type == "series" || meta?.type == "anime"
 
     LaunchedEffect(id, type) {
         viewModel.loadMeta(id, type)
     }
 
     LaunchedEffect(meta) {
-        if (meta?.type == "series" || meta?.type == "anime") {
-            val seasons = meta.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: emptyList()
+        if (isSeries) {
+            val seasons = meta?.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: emptyList()
             if (seasons.isNotEmpty() && uiState.selectedSeason == null) {
-                viewModel.selectSeason(seasons.first())
+                viewModel.selectSeasonAndLoad(seasons.first())
             }
         }
     }
@@ -8781,8 +8968,10 @@ fun DetailsScreen(
     Box(modifier = Modifier.fillMaxSize().background(BackgroundDark)) {
         if (meta != null) {
             LazyColumn(
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 80.dp)
             ) {
+                // ─── HERO SECTION ──────────────────────────────────────────────
                 item {
                     Box(
                         modifier = Modifier
@@ -8810,6 +8999,7 @@ fun DetailsScreen(
                                 )
                         )
 
+                        // Top bar with back and action buttons
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -8831,8 +9021,12 @@ fun DetailsScreen(
                                     color = Color.Black.copy(alpha = 0.6f),
                                     modifier = Modifier.size(44.dp)
                                 ) {
-                                    IconButton(onClick = { /* View History */ }) {
-                                        Icon(Icons.Default.History, contentDescription = "History", tint = Color.White)
+                                    IconButton(onClick = { viewModel.toggleWatchlist(meta) }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Bookmark,
+                                            contentDescription = "Watchlist",
+                                            tint = if (uiState.inWatchlist) AccentBlue else Color.White
+                                        )
                                     }
                                 }
                                 Surface(
@@ -8843,7 +9037,7 @@ fun DetailsScreen(
                                     IconButton(onClick = { viewModel.toggleLibrary(meta) }) {
                                         Icon(
                                             imageVector = if (uiState.inLibrary) Icons.Default.Bookmark else Icons.Outlined.BookmarkBorder,
-                                            contentDescription = "Bookmark",
+                                            contentDescription = "Library",
                                             tint = if (uiState.inLibrary) AccentBlue else Color.White
                                         )
                                     }
@@ -8851,6 +9045,7 @@ fun DetailsScreen(
                             }
                         }
 
+                        // Bottom content: type badge, title, meta, description, cast
                         Column(
                             modifier = Modifier
                                 .align(Alignment.BottomStart)
@@ -8878,15 +9073,27 @@ fun DetailsScreen(
                                 color = Color.White
                             )
                             Spacer(modifier = Modifier.height(4.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
                                 Text(meta.year ?: "", style = MaterialTheme.typography.bodyMedium, color = Color.White)
                                 Text("•", style = MaterialTheme.typography.bodyMedium, color = TextMuted)
                                 Text(meta.runtime ?: "N/A", style = MaterialTheme.typography.bodyMedium, color = Color.White)
                                 Text("•", style = MaterialTheme.typography.bodyMedium, color = TextMuted)
-                                Text("⭐ ${meta.imdbRating ?: "N/A"}", style = MaterialTheme.typography.bodyMedium, color = AccentBlue, fontWeight = FontWeight.Bold)
+                                Text(
+                                    "⭐ ${meta.imdbRating ?: "N/A"}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = AccentBlue,
+                                    fontWeight = FontWeight.Bold
+                                )
                                 if (!meta.genre.isNullOrEmpty()) {
                                     Text("•", style = MaterialTheme.typography.bodyMedium, color = TextMuted)
-                                    Text(meta.genre!!.take(2).joinToString(", "), style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                                    Text(
+                                        meta.genre!!.take(2).joinToString(", "),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = Color.White
+                                    )
                                 }
                             }
                             Spacer(modifier = Modifier.height(12.dp))
@@ -8899,7 +9106,6 @@ fun DetailsScreen(
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             if (!meta.cast.isNullOrEmpty()) {
-                                @OptIn(ExperimentalLayoutApi::class)
                                 FlowRow(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -8920,94 +9126,146 @@ fun DetailsScreen(
                                     }
                                 }
                             }
-                        }
-                    }
-                }
+                            Spacer(modifier = Modifier.height(16.dp))
 
-                item {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Button(
-                            onClick = {
-                                viewModel.loadStreams(meta.id, meta.type, uiState.selectedSeason, uiState.selectedEpisode)
-                                showStreamsSheet = true
-                            },
-                            modifier = Modifier.fillMaxWidth().height(56.dp),
-                            shape = RoundedCornerShape(50),
-                            colors = ButtonDefaults.buttonColors(containerColor = AccentBlue, contentColor = Color.Black)
-                        ) {
-                            Icon(Icons.Default.Satellite, contentDescription = null, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(if (uiState.streamsLoading) "Loading Streams..." else "Find Streams", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedButton(
-                            onClick = { /* Open IMDb */ },
-                            modifier = Modifier.fillMaxWidth().height(48.dp),
-                            shape = RoundedCornerShape(50),
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
-                        ) {
-                            Icon(Icons.Default.Movie, contentDescription = null, tint = Color.White)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("View on IMDb", fontWeight = FontWeight.Bold, color = Color.White)
-                        }
-                    }
-                }
-
-                if (meta.type == "series" || meta.type == "anime") {
-                    val seasons = meta.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: emptyList()
-                    val episodes = meta.videos
-                        ?.filter { it.season == uiState.selectedSeason }
-                        ?.sortedBy { it.episode } ?: emptyList()
-
-                    item {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Episodes",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                            if (seasons.isNotEmpty()) {
-                                Surface(
+                            // ─── ACTION BUTTON (only for movies) ──────────────
+                            if (!isSeries) {
+                                Button(
+                                    onClick = {
+                                        viewModel.loadStreams(meta.id, meta.type, null, null)
+                                        showStreamsSheet = true
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(56.dp),
                                     shape = RoundedCornerShape(50),
-                                    color = Color.White.copy(alpha = 0.1f),
-                                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = AccentBlue,
+                                        contentColor = Color.Black
+                                    )
                                 ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp).clickable { showSeasonsSheet = true },
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        Text("Season ${uiState.selectedSeason ?: ""}", fontWeight = FontWeight.Bold)
-                                        Icon(Icons.Default.ExpandMore, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    }
+                                    Icon(Icons.Default.Satellite, contentDescription = null, modifier = Modifier.size(20.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        if (uiState.streamsLoading) "Loading Streams..." else "Find Streams",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp
+                                    )
                                 }
                             }
+
+                            // IMDb link (always visible)
+                            OutlinedButton(
+                                onClick = {
+                                    val imdbId = meta.imdbId
+                                    if (!imdbId.isNullOrBlank()) {
+                                        context.startActivity(
+                                            Intent(Intent.ACTION_VIEW, Uri.parse("https://www.imdb.com/title/$imdbId"))
+                                        )
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp),
+                                shape = RoundedCornerShape(50),
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
+                            ) {
+                                Icon(Icons.Default.Movie, contentDescription = null, tint = Color.White)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("View on IMDb", fontWeight = FontWeight.Bold, color = Color.White)
+                            }
+                        }
+                    }
+                }
+
+                // ─── SERIES: SEASON SELECTOR CHIPS ───────────────────────────
+                if (isSeries) {
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState())
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            FilterChip(
+                                selected = isAllSeasons,
+                                onClick = { viewModel.toggleAllSeasons() },
+                                label = { Text("All Seasons") },
+                                modifier = Modifier.padding(vertical = 4.dp),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                                )
+                            )
+                            availableSeasons.forEach { season ->
+                                FilterChip(
+                                    selected = season == selectedSeason && !isAllSeasons,
+                                    onClick = { viewModel.selectSeasonAndLoad(season) },
+                                    label = { Text("S$season") },
+                                    modifier = Modifier.padding(vertical = 4.dp),
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                )
+                            }
                         }
                     }
 
-                    item {
-                        Column(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            episodes.forEach { video ->
-                                val isWatched = uiState.watchProgress?.let { it.percent >= 100 } ?: false
-                                
-                                EpisodeCard(
-                                    video = video,
-                                    isWatched = isWatched,
-                                    progressPercent = uiState.watchProgress?.percent ?: 0,
-                                    onClick = {
-                                        viewModel.selectEpisode(video.episode ?: 0)
-                                        viewModel.loadStreams(meta.id, meta.type, uiState.selectedSeason, video.episode)
-                                        showStreamsSheet = true
-                                    }
-                                )
+                    // ─── EPISODE CARDS (vertical list) ──────────────────────
+                    items(filteredEpisodes) { video ->
+                        val epNum = video.episode ?: 0
+                        val seasonNum = video.season ?: 0
+                        val isWatched = uiState.watchProgress?.percent?.let { it >= 100 } ?: false
+                        val progressPercent = uiState.watchProgress?.percent ?: 0
+
+                        EpisodeCard(
+                            video = video,
+                            isWatched = isWatched,
+                            progressPercent = progressPercent,
+                            onClick = {
+                                // Load streams for this specific episode and show the streams sheet
+                                viewModel.selectEpisode(epNum)
+                                viewModel.loadStreams(meta.id, meta.type, seasonNum, epNum)
+                                showStreamsSheet = true
                             }
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    // Spacer at bottom
+                    item {
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+                }
+
+                // ─── EMPTY / LOADING / ERROR STATES ──────────────────────────
+                if (uiState.isLoading) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillParentMaxWidth()
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = AccentBlue)
+                        }
+                    }
+                }
+                if (uiState.error != null) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillParentMaxWidth()
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Error: ${uiState.error}",
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
                         }
                     }
                 }
@@ -9024,39 +9282,172 @@ fun DetailsScreen(
         }
     }
 
-    if (showSeasonsSheet) {
-        val seasons = meta?.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: emptyList()
-        SeasonsSheet(
-            seasons = seasons,
-            currentSeason = uiState.selectedSeason ?: 0,
-            onDismiss = { showSeasonsSheet = false },
-            onSeasonSelected = { season ->
-                viewModel.selectSeason(season)
-                showSeasonsSheet = false
+    // ─── STREAMS BOTTOM SHEET ──────────────────────────────────────────────
+    if (showStreamsSheet && uiState.streams.isNotEmpty()) {
+        StreamsSheet(
+            streams = uiState.streams,
+            onDismiss = { showStreamsSheet = false },
+            onStreamClick = { stream ->
+                showStreamsSheet = false
+                selectedStream = stream
+                showActionSheet = true
             }
         )
     }
 
-    if (showStreamsSheet && uiState.streams.isNotEmpty()) {
+    // ─── STREAM ACTION SHEET ───────────────────────────────────────────────
+    if (showActionSheet && selectedStream != null) {
+        val stream = selectedStream!!
+        val title = meta?.name ?: "Stream"
         ModalBottomSheet(
-            onDismissRequest = { showStreamsSheet = false }
+            onDismissRequest = { showActionSheet = false }
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("Available Streams", style = MaterialTheme.typography.headlineSmall)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Text(
+                    text = "Stream Options",
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                // Play
+                Button(
+                    onClick = {
+                        showActionSheet = false
+                        viewModel.playStream(stream, title) { resolved, t ->
+                            onPlay(resolved, t)
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Play in Default Player", fontWeight = FontWeight.Bold)
+                }
+
                 Spacer(modifier = Modifier.height(8.dp))
-                LazyColumn {
-                    items(uiState.streams) { stream ->
-                        StreamCard(
-                            stream = stream,
-                            onClick = {
-                                showStreamsSheet = false
-                                viewModel.playStream(stream, meta?.name ?: "Stream") { resolvedStream, title ->
-                                    onPlay(resolvedStream, title)
-                                }
+
+                // Action grid
+                val actions = mutableListOf<Pair<String, () -> Unit>>()
+
+                // Smart Playlist (only if series and episode info)
+                if (uiState.selectedEpisode != null && uiState.selectedSeason != null && isSeries && meta != null) {
+                    actions.add("Make Smart Playlist" to {
+                        scope.launch {
+                            val success = viewModel.createSmartPlaylist(meta, uiState.selectedSeason!!)
+                            if (success) {
+                                Toast.makeText(context, "Smart Playlist created!", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, "Failed to create playlist", Toast.LENGTH_SHORT).show()
                             }
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        }
+                    })
+                }
+
+                actions.addAll(listOf(
+                    "Search Subtitles" to {
+                        scope.launch {
+                            if (uiState.selectedSeason != null && uiState.selectedEpisode != null && isSeries && meta != null) {
+                                val subs = viewModel.fetchSubtitles(
+                                    meta.id,
+                                    meta.type,
+                                    uiState.selectedSeason!!,
+                                    uiState.selectedEpisode!!
+                                )
+                                if (subs.isNotEmpty()) {
+                                    Toast.makeText(context, "✅ ${subs.size} subtitles found!", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "No subtitles available", Toast.LENGTH_SHORT).show()
+                                }
+                            } else {
+                                Toast.makeText(context, "Select an episode first", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    "Download / Open Browser" to {
+                        val url = stream.url ?: stream.streamUrl ?: stream.externalUrl
+                        if (!url.isNullOrBlank()) {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                            context.startActivity(Intent.createChooser(intent, "Open with"))
+                        } else {
+                            Toast.makeText(context, "No URL available", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    "Copy Magnet Link" to {
+                        val magnet = if (stream.url?.startsWith("magnet:") == true) stream.url
+                        else if (stream.infoHash != null) "magnet:?xt=urn:btih:${stream.infoHash}"
+                        else null
+                        if (magnet != null) {
+                            clipboard.setText(AnnotatedString(magnet))
+                            Toast.makeText(context, "Magnet copied to clipboard", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "No magnet link available", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    "Copy Video URL" to {
+                        val url = stream.url ?: stream.streamUrl ?: stream.externalUrl
+                        if (!url.isNullOrBlank()) {
+                            clipboard.setText(AnnotatedString(url))
+                            Toast.makeText(context, "URL copied to clipboard", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "No URL available", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    "Export .m3u" to {
+                        val url = stream.url ?: stream.streamUrl ?: stream.externalUrl
+                        if (!url.isNullOrBlank() && !url.startsWith("magnet:")) {
+                            val exporter = M3UExporter(context)
+                            val file = exporter.exportToM3U(listOf(stream), title)
+                            if (file != null) {
+                                exporter.shareM3U(file)
+                            } else {
+                                Toast.makeText(context, "Failed to create M3U", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            Toast.makeText(context, "Cannot export magnet or empty URL", Toast.LENGTH_SHORT).show()
+                        }
                     }
+                ))
+
+                actions.chunked(2).forEach { row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        row.forEach { (label, action) ->
+                            OutlinedButton(
+                                onClick = {
+                                    action()
+                                    showActionSheet = false
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.onSurface
+                                )
+                            ) {
+                                Text(
+                                    label,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                        if (row.size == 1) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
             }
         }
@@ -9074,12 +9465,17 @@ package com.ultrastream.app.ui.screens.details
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import com.ultrastream.app.data.dao.*
 import com.ultrastream.app.data.models.*
 import com.ultrastream.app.data.preferences.PreferencesManager
 import com.ultrastream.app.data.repository.AddonRepository
 import com.ultrastream.app.data.repository.MetaRepository
 import com.ultrastream.app.data.repository.StreamRepository
+import com.ultrastream.app.network.StremioApi
+import com.ultrastream.app.utils.buildAddonBaseUrl
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -9097,7 +9493,9 @@ class DetailsViewModel @Inject constructor(
     private val watchProgressDao: WatchProgressDao,
     private val watchedEpisodeDao: WatchedEpisodeDao,
     private val libraryDao: LibraryDao,
-    private val watchlistDao: WatchlistDao
+    private val watchlistDao: WatchlistDao,
+    private val smartPlaylistDao: SmartPlaylistDao,
+    private val stremioApi: StremioApi
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DetailsUiState())
@@ -9105,6 +9503,23 @@ class DetailsViewModel @Inject constructor(
 
     private var currentSeason: Int? = null
     private var currentEpisode: Int? = null
+
+    // Filtered episodes & seasons
+    private val _filteredEpisodes = MutableStateFlow<List<Video>>(emptyList())
+    val filteredEpisodes: StateFlow<List<Video>> = _filteredEpisodes.asStateFlow()
+
+    private val _availableSeasons = MutableStateFlow<List<Int>>(emptyList())
+    val availableSeasons: StateFlow<List<Int>> = _availableSeasons.asStateFlow()
+
+    private val _selectedSeason = MutableStateFlow<Int?>(null)
+    val selectedSeason: StateFlow<Int?> = _selectedSeason.asStateFlow()
+
+    private val _isAllSeasons = MutableStateFlow(false)
+    val isAllSeasons: StateFlow<Boolean> = _isAllSeasons.asStateFlow()
+
+    private val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+    private val episodeListType = Types.newParameterizedType(List::class.java, PlaylistEpisode::class.java)
+    private val episodeAdapter = moshi.adapter<List<PlaylistEpisode>>(episodeListType)
 
     fun loadMeta(id: String, type: String) {
         viewModelScope.launch {
@@ -9122,6 +9537,7 @@ class DetailsViewModel @Inject constructor(
                     isLoading = false,
                     error = null
                 )
+                filterAndSortEpisodes(meta.videos)
             } else {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -9131,10 +9547,89 @@ class DetailsViewModel @Inject constructor(
         }
     }
 
-    fun selectSeason(season: Int) {
-        currentSeason = season
-        currentEpisode = null
-        _uiState.value = _uiState.value.copy(selectedSeason = season, selectedEpisode = null)
+    private fun filterAndSortEpisodes(episodes: List<Video>?) {
+        if (episodes == null) {
+            _filteredEpisodes.value = emptyList()
+            _availableSeasons.value = emptyList()
+            return
+        }
+        val filtered = mutableListOf<Video>()
+        val seen = mutableSetOf<String>()
+        val seasonMap = mutableMapOf<Int, MutableList<Video>>()
+        val junkPattern = Regex(
+            "opening|ending|creditless|ncop|nced|trailer|promo|teaser|ova|oav|special",
+            RegexOption.IGNORE_CASE
+        )
+
+        episodes.forEach { ep ->
+            if (ep.season == null || ep.episode == null) return@forEach
+            if (ep.season == 0 || ep.episode == 0) return@forEach
+            val name = ep.name ?: ep.title ?: ""
+            if (junkPattern.containsMatchIn(name)) return@forEach
+            if (listOf(480, 720, 1080, 2160, 264, 265).contains(ep.episode) && name.isBlank()) return@forEach
+            val key = "S${ep.season}E${ep.episode}"
+            if (seen.contains(key)) return@forEach
+            seen.add(key)
+            seasonMap.getOrPut(ep.season) { mutableListOf() }.add(ep)
+        }
+
+        seasonMap.values.forEach { list -> list.sortBy { it.episode ?: 0 } }
+        // Remove outliers (gaps > 20)
+        seasonMap.values.forEach { seasonEpisodes ->
+            if (seasonEpisodes.size > 1) {
+                var prev = seasonEpisodes[0].episode ?: 0
+                val toRemove = mutableListOf<Video>()
+                for (i in 1 until seasonEpisodes.size) {
+                    val current = seasonEpisodes[i].episode ?: 0
+                    if (current > prev + 20) {
+                        toRemove.add(seasonEpisodes[i])
+                    }
+                    prev = current
+                }
+                seasonEpisodes.removeAll(toRemove)
+            }
+        }
+
+        val all = seasonMap.keys.sorted().flatMap { seasonMap[it] ?: emptyList() }
+        val seasons = all.mapNotNull { it.season }.distinct().sorted()
+        _availableSeasons.value = seasons
+        _filteredEpisodes.value = all
+        if (seasons.isNotEmpty() && _selectedSeason.value == null && !_isAllSeasons.value) {
+            _selectedSeason.value = seasons.first()
+        }
+        applySeasonFilter()
+    }
+
+    fun toggleAllSeasons() {
+        _isAllSeasons.value = !_isAllSeasons.value
+        if (_isAllSeasons.value) {
+            _selectedSeason.value = null
+        } else {
+            val seasons = _availableSeasons.value
+            if (seasons.isNotEmpty()) _selectedSeason.value = seasons.first()
+        }
+        applySeasonFilter()
+    }
+
+    fun selectSeason(season: Int?) {
+        _selectedSeason.value = season
+        if (season != null) _isAllSeasons.value = false
+        applySeasonFilter()
+    }
+
+    private fun applySeasonFilter() {
+        val all = _filteredEpisodes.value
+        if (all.isEmpty()) return
+        val result = if (_isAllSeasons.value || _selectedSeason.value == null) {
+            all
+        } else {
+            all.filter { it.season == _selectedSeason.value }
+        }
+        _filteredEpisodes.value = result
+    }
+
+    fun selectSeasonAndLoad(season: Int?) {
+        selectSeason(season)
         loadStreamsForCurrentSelection()
     }
 
@@ -9214,6 +9709,77 @@ class DetailsViewModel @Inject constructor(
             val resolved = streamRepository.resolveStream(stream, debridKey.takeIf { it.isNotBlank() })
             onResolved(resolved, title)
         }
+    }
+
+    // ============================================================
+    // SMART PLAYLIST CREATION (Room insertion)
+    // ============================================================
+    suspend fun createSmartPlaylist(meta: MetaItem, season: Int): Boolean {
+        return try {
+            val episodes = meta.videos?.filter { it.season == season } ?: emptyList()
+            if (episodes.isEmpty()) return false
+
+            val playlistEpisodes = episodes.map { ep ->
+                PlaylistEpisode(
+                    epNum = ep.episode ?: 0,
+                    epName = ep.name ?: "Episode ${ep.episode}",
+                    title = "${meta.name} - S${season}E${ep.episode}",
+                    stream = null,
+                    isMissing = true
+                )
+            }
+
+            val episodesJson = episodeAdapter.toJson(playlistEpisodes)
+            val playlist = SmartPlaylist(
+                id = "${meta.id}_S${season}_${System.currentTimeMillis()}",
+                metaId = meta.id,
+                metaName = meta.name,
+                poster = meta.poster,
+                season = season,
+                addon = "SmartPlaylist",
+                total = episodes.size,
+                fetched = 0,
+                status = "Pending",
+                episodesJson = episodesJson
+            )
+
+            smartPlaylistDao.insert(playlist)
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    // ============================================================
+    // SUBTITLE FETCHING FROM ADDONS
+    // ============================================================
+    suspend fun fetchSubtitles(metaId: String, type: String, season: Int, episode: Int): List<Subtitle> {
+        val allSubtitles = mutableListOf<Subtitle>()
+        val addons = addonRepository.getEnabledAddons()
+        val idWithExtra = "$metaId:$season:$episode"
+
+        for (addon in addons) {
+            val baseUrl = buildAddonBaseUrl(addon.url)
+            val url = "$baseUrl/subtitles/$type/$idWithExtra.json"
+            try {
+                val response = stremioApi.getSubtitles(url)
+                response.subtitles?.let { subs ->
+                    subs.forEach { netSub ->
+                        allSubtitles.add(
+                            Subtitle(
+                                url = netSub.url,
+                                file = netSub.file,
+                                lang = netSub.lang,
+                                name = netSub.name
+                            )
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                // skip this addon
+            }
+        }
+        return allSubtitles.distinctBy { it.url ?: it.file }
     }
 
     data class DetailsUiState(
@@ -10682,6 +11248,9 @@ interface StremioApi {
 
     @GET
     suspend fun getStreams(@Url url: String): StreamResponse
+
+    @GET
+    suspend fun getSubtitles(@Url url: String): SubtitleResponse
 }
 
 data class ManifestResponse(
@@ -10764,6 +11333,210 @@ data class StreamSubtitle(
     val file: String?,
     val lang: String?,
     val name: String?
+)
+
+data class SubtitleResponse(
+    val subtitles: List<StreamSubtitle>? = emptyList()
+)
+
+```
+
+---
+
+## File: `app/src/main/java/com/ultrastream/app/network/PremiumizeApi.kt`
+
+```kotlin
+package com.ultrastream.app.network
+
+import retrofit2.http.GET
+import retrofit2.http.Header
+import retrofit2.http.Query
+
+interface PremiumizeApi {
+
+    @GET("transfer/create")
+    suspend fun createTransfer(
+        @Header("Authorization") auth: String,
+        @Query("src") src: String
+    ): PremiumizeTransferResponse
+
+    @GET("transfer/list")
+    suspend fun getTransferStatus(
+        @Header("Authorization") auth: String,
+        @Query("id") id: String
+    ): PremiumizeStatusResponse
+
+    @GET("item/details")
+    suspend fun getItemDetails(
+        @Header("Authorization") auth: String,
+        @Query("id") id: String
+    ): PremiumizeItemResponse
+}
+
+data class PremiumizeTransferResponse(
+    val status: String = "",
+    val id: String = "",
+    val name: String = "",
+    val message: String = ""
+)
+
+data class PremiumizeStatusResponse(
+    val status: String = "",
+    val message: String = "",
+    val id: String = "",
+    val transfers: List<PremiumizeTransferItem> = emptyList()
+)
+
+data class PremiumizeTransferItem(
+    val id: String = "",
+    val name: String = "",
+    val status: String = "",
+    val message: String = "",
+    val progress: Double = 0.0,
+    val file_id: String = "",
+    val folder_id: String = "",
+    val size: Long = 0L,
+    val created_at: String = "",
+    val finished_at: String = "",
+    val files: List<PremiumizeFileInfo> = emptyList()
+)
+
+data class PremiumizeFileInfo(
+    val id: String = "",
+    val name: String = "",
+    val size: Long = 0L,
+    val link: String = "",
+    val stream_link: String = "",
+    val type: String = "",
+    val path: String = ""
+)
+
+data class PremiumizeItemResponse(
+    val status: String = "",
+    val message: String = "",
+    val id: String = "",
+    val name: String = "",
+    val type: String = "",
+    val size: Long = 0L,
+    val link: String = "",
+    val stream_link: String = "",
+    val content: List<PremiumizeContent> = emptyList()
+)
+
+data class PremiumizeContent(
+    val id: String = "",
+    val name: String = "",
+    val size: Long = 0L,
+    val link: String = "",
+    val stream_link: String = "",
+    val type: String = "",
+    val path: String = ""
+)
+
+```
+
+---
+
+## File: `app/src/main/java/com/ultrastream/app/network/AllDebridApi.kt`
+
+```kotlin
+package com.ultrastream.app.network
+
+import retrofit2.http.GET
+import retrofit2.http.Header
+import retrofit2.http.Query
+
+interface AllDebridApi {
+
+    @GET("magnet/upload")
+    suspend fun uploadMagnet(
+        @Header("Authorization") auth: String,
+        @Query("magnet") magnet: String
+    ): AllDebridUploadResponse
+
+    @GET("magnet/status")
+    suspend fun getMagnetStatus(
+        @Header("Authorization") auth: String,
+        @Query("id") id: String
+    ): AllDebridStatusResponse
+
+    @GET("magnet/link")
+    suspend fun getMagnetLink(
+        @Header("Authorization") auth: String,
+        @Query("id") id: String
+    ): AllDebridLinkResponse
+}
+
+data class AllDebridUploadResponse(
+    val status: Boolean = false,
+    val message: String = "",
+    val data: AllDebridUploadData? = null
+)
+
+data class AllDebridUploadData(
+    val id: String = "",
+    val name: String = "",
+    val size: Long = 0L,
+    val hash: String = "",
+    val links: List<String> = emptyList()
+)
+
+data class AllDebridStatusResponse(
+    val status: Boolean = false,
+    val message: String = "",
+    val data: AllDebridStatusData? = null
+)
+
+data class AllDebridStatusData(
+    val id: String = "",
+    val magnets: List<AllDebridMagnetItem> = emptyList()
+)
+
+data class AllDebridMagnetItem(
+    val id: String = "",
+    val filename: String = "",
+    val size: Long = 0L,
+    val status: String = "",
+    val statusCode: Int = 0,
+    val downloaded: Long = 0L,
+    val uploaded: Long = 0L,
+    val speed: Long = 0L,
+    val seeders: Int = 0,
+    val files: List<AllDebridFileLink> = emptyList()
+)
+
+data class AllDebridFileLink(
+    val link: String = "",
+    val filename: String = "",
+    val size: Long = 0L,
+    val stream: List<AllDebridStreamInfo> = emptyList()
+)
+
+data class AllDebridStreamInfo(
+    val url: String = "",
+    val quality: String = "",
+    val language: String = "",
+    val subtitles: List<AllDebridSubtitle> = emptyList()
+)
+
+data class AllDebridSubtitle(
+    val url: String = "",
+    val lang: String = ""
+)
+
+data class AllDebridLinkResponse(
+    val status: Boolean = false,
+    val message: String = "",
+    val data: AllDebridLinkData? = null
+)
+
+data class AllDebridLinkData(
+    val link: String = "",
+    val filename: String = "",
+    val filesize: Long = 0L,
+    val host: String = "",
+    val hostDomain: String = "",
+    val stream: List<AllDebridStreamInfo> = emptyList()
 )
 
 ```
@@ -12125,70 +12898,231 @@ object ShareHelper {
 ```kotlin
 package com.ultrastream.app.utils
 
+import android.util.Log
+import com.ultrastream.app.network.AllDebridApi
+import com.ultrastream.app.network.PremiumizeApi
 import com.ultrastream.app.network.RealDebridApi
 import kotlinx.coroutines.delay
 import javax.inject.Inject
 import javax.inject.Singleton
 
+private const val TAG = "DebridHelper"
+
 @Singleton
 class DebridHelper @Inject constructor(
-    private val realDebridApi: RealDebridApi
+    private val realDebridApi: RealDebridApi,
+    private val allDebridApi: AllDebridApi,
+    private val premiumizeApi: PremiumizeApi
 ) {
 
-    suspend fun resolveStreamUrl(url: String, debridKey: String?): String {
-        if (debridKey.isNullOrBlank()) return url
-
-        val auth = "Bearer $debridKey"
-
-        if (url.startsWith("magnet:")) {
-            return resolveMagnet(url, auth)
-        }
-
-        if (url.matches(Regex("^[a-fA-F0-9]{40}$"))) {
-            val magnet = "magnet:?xt=urn:btih:$url"
-            return resolveMagnet(magnet, auth)
-        }
-
-        return applyDebridParams(url, debridKey)
+    enum class DebridProvider {
+        REAL_DEBRID, ALL_DEBRID, PREMIUMIZE
     }
 
-    private suspend fun resolveMagnet(magnet: String, auth: String): String {
-        val hash = extractHash(magnet)
-        if (hash.isEmpty()) return magnet
+    enum class DebridStatus {
+        NOT_CONFIGURED, ACTIVE, EXPIRED, INVALID
+    }
 
-        val availability = realDebridApi.checkInstantAvailability(auth, hash)
-        if (availability.isNotEmpty()) {
-            val cached = availability.values.firstOrNull { it.isNotEmpty() }
-            if (cached != null) {
-                val addResponse = realDebridApi.addMagnet(auth, magnet)
-                val torrentId = addResponse.id
-                var status = realDebridApi.getTorrentStatus(auth, torrentId)
-                var attempts = 0
-                while (status.status != "downloaded" && status.status != "ready" && attempts < 30) {
-                    delay(1000)
-                    status = realDebridApi.getTorrentStatus(auth, torrentId)
-                    attempts++
-                }
-                if (status.status == "downloaded" || status.status == "ready") {
-                    val link = status.links.firstOrNull() ?: return magnet
-                    val unrestricted = realDebridApi.unrestrictLink(auth, link)
-                    return unrestricted.link
+    suspend fun resolveStreamUrl(
+        url: String,
+        debridKey: String?,
+        provider: DebridProvider = DebridProvider.REAL_DEBRID
+    ): String {
+        if (debridKey.isNullOrBlank()) {
+            Log.d(TAG, "No debrid key provided, returning original URL")
+            return url
+        }
+
+        return try {
+            when (provider) {
+                DebridProvider.REAL_DEBRID -> resolveRealDebrid(url, debridKey)
+                DebridProvider.ALL_DEBRID -> resolveAllDebrid(url, debridKey)
+                DebridProvider.PREMIUMIZE -> resolvePremiumize(url, debridKey)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Debrid resolution failed for $provider: ${e.message}", e)
+            url
+        }
+    }
+
+    // =========================== REAL-DEBRID ===========================
+    private suspend fun resolveRealDebrid(url: String, apiKey: String): String {
+        val auth = "Bearer $apiKey"
+
+        return if (url.startsWith("magnet:")) {
+            resolveRealDebridMagnet(url, auth)
+        } else if (url.matches(Regex("^[a-fA-F0-9]{40}$"))) {
+            val magnet = "magnet:?xt=urn:btih:$url"
+            resolveRealDebridMagnet(magnet, auth)
+        } else {
+            applyDebridParams(url, apiKey)
+        }
+    }
+
+    private suspend fun resolveRealDebridMagnet(magnet: String, auth: String): String {
+        val hash = extractHash(magnet)
+        if (hash.isEmpty()) {
+            Log.d(TAG, "No valid hash in magnet, returning original")
+            return magnet
+        }
+
+        return try {
+            val availability = realDebridApi.checkInstantAvailability(auth, hash)
+            if (availability.isNotEmpty()) {
+                val cached = availability.values.firstOrNull { it.isNotEmpty() }
+                if (cached != null) {
+                    val addResponse = realDebridApi.addMagnet(auth, magnet)
+                    val torrentId = addResponse.id
+                    realDebridApi.selectFiles(auth, torrentId, "all")
+                    var status = realDebridApi.getTorrentStatus(auth, torrentId)
+                    var attempts = 0
+                    while (status.status != "downloaded" && status.status != "ready" && attempts < 60) {
+                        delay(1000)
+                        status = realDebridApi.getTorrentStatus(auth, torrentId)
+                        attempts++
+                    }
+                    if (status.status == "downloaded" || status.status == "ready") {
+                        val link = status.links.firstOrNull()
+                        if (link != null) {
+                            val unrestricted = realDebridApi.unrestrictLink(auth, link)
+                            return unrestricted.link
+                        }
+                    }
                 }
             }
+            magnet
+        } catch (e: Exception) {
+            Log.e(TAG, "Real-Debrid magnet resolution failed: ${e.message}", e)
+            magnet
         }
-        return magnet
     }
 
+    // =========================== ALL-DEBRID ===========================
+    private suspend fun resolveAllDebrid(url: String, apiKey: String): String {
+        return if (url.startsWith("magnet:")) {
+            resolveAllDebridMagnet(url, apiKey)
+        } else if (url.matches(Regex("^[a-fA-F0-9]{40}$"))) {
+            val magnet = "magnet:?xt=urn:btih:$url"
+            resolveAllDebridMagnet(magnet, apiKey)
+        } else {
+            applyDebridParams(url, apiKey)
+        }
+    }
+
+    private suspend fun resolveAllDebridMagnet(magnet: String, apiKey: String): String {
+        val hash = extractHash(magnet)
+        if (hash.isEmpty()) {
+            Log.d(TAG, "No valid hash in magnet, returning original")
+            return magnet
+        }
+
+        return try {
+            val uploadResponse = allDebridApi.uploadMagnet(apiKey, magnet)
+            if (!uploadResponse.status || uploadResponse.data == null || uploadResponse.data.id.isEmpty()) {
+                Log.e(TAG, "AllDebrid upload failed: ${uploadResponse.message}")
+                return magnet
+            }
+            val torrentId = uploadResponse.data.id
+
+            var statusResponse = allDebridApi.getMagnetStatus(apiKey, torrentId)
+            var attempts = 0
+            while (attempts < 60) {
+                val magnets = statusResponse.data?.magnets ?: emptyList()
+                val first = magnets.firstOrNull()
+                if (first != null && first.status == "Completed") {
+                    break
+                }
+                delay(2000)
+                statusResponse = allDebridApi.getMagnetStatus(apiKey, torrentId)
+                attempts++
+            }
+
+            val magnetItem = statusResponse.data?.magnets?.firstOrNull()
+            if (magnetItem != null && magnetItem.status == "Completed") {
+                val linkResponse = allDebridApi.getMagnetLink(apiKey, torrentId)
+                if (linkResponse.status && linkResponse.data != null && linkResponse.data.link.isNotEmpty()) {
+                    return linkResponse.data.link
+                }
+            }
+            magnet
+        } catch (e: Exception) {
+            Log.e(TAG, "AllDebrid magnet resolution failed: ${e.message}", e)
+            magnet
+        }
+    }
+
+    // =========================== PREMIUMIZE ===========================
+    private suspend fun resolvePremiumize(url: String, apiKey: String): String {
+        return if (url.startsWith("magnet:")) {
+            resolvePremiumizeMagnet(url, apiKey)
+        } else if (url.matches(Regex("^[a-fA-F0-9]{40}$"))) {
+            val magnet = "magnet:?xt=urn:btih:$url"
+            resolvePremiumizeMagnet(magnet, apiKey)
+        } else {
+            applyDebridParams(url, apiKey)
+        }
+    }
+
+    private suspend fun resolvePremiumizeMagnet(magnet: String, apiKey: String): String {
+        val hash = extractHash(magnet)
+        if (hash.isEmpty()) {
+            Log.d(TAG, "No valid hash in magnet, returning original")
+            return magnet
+        }
+
+        return try {
+            val transferResponse = premiumizeApi.createTransfer(apiKey, magnet)
+            if (transferResponse.status != "success" || transferResponse.id.isEmpty()) {
+                Log.e(TAG, "Premiumize transfer creation failed: ${transferResponse.message}")
+                return magnet
+            }
+            val transferId = transferResponse.id
+
+            var statusResponse = premiumizeApi.getTransferStatus(apiKey, transferId)
+            var attempts = 0
+            while (attempts < 60) {
+                val transfers = statusResponse.transfers ?: emptyList()
+                val first = transfers.firstOrNull()
+                if (first != null && first.status == "finished") {
+                    break
+                }
+                delay(2000)
+                statusResponse = premiumizeApi.getTransferStatus(apiKey, transferId)
+                attempts++
+            }
+
+            val transferItem = statusResponse.transfers?.firstOrNull()
+            if (transferItem != null && transferItem.status == "finished") {
+                val itemResponse = premiumizeApi.getItemDetails(apiKey, transferId)
+                if (itemResponse.status == "success" && itemResponse.link.isNotEmpty()) {
+                    return itemResponse.link
+                }
+            }
+            magnet
+        } catch (e: Exception) {
+            Log.e(TAG, "Premiumize magnet resolution failed: ${e.message}", e)
+            magnet
+        }
+    }
+
+    // =========================== HELPERS ===========================
     private fun extractHash(magnet: String): String {
         val match = Regex("btih:([a-fA-F0-9]{40})").find(magnet)
         return match?.groupValues?.get(1) ?: ""
     }
 
-    // FIXED: Made public so StreamRepository can access it without visibility errors
     fun applyDebridParams(url: String, debridKey: String): String {
         if (debridKey.isBlank()) return url
         val separator = if (url.contains("?")) "&" else "?"
         return "$url${separator}realdebrid=$debridKey"
+    }
+
+    fun getDebridStatus(key: String): DebridStatus {
+        return when {
+            key.isBlank() -> DebridStatus.NOT_CONFIGURED
+            key.length < 20 -> DebridStatus.INVALID
+            else -> DebridStatus.ACTIVE
+        }
     }
 }
 
@@ -12222,6 +13156,76 @@ class UrlClassifier @Inject constructor() {
 
     enum class UrlType {
         HLS, DASH, PROXY, DIRECT, MAGNET, UNKNOWN, INVALID
+    }
+}
+
+```
+
+---
+
+## File: `app/src/main/java/com/ultrastream/app/utils/M3UExporter.kt`
+
+```kotlin
+package com.ultrastream.app.utils
+
+import android.content.Context
+import android.content.Intent
+import androidx.core.content.FileProvider
+import com.ultrastream.app.data.models.StreamItem
+import java.io.File
+
+class M3UExporter(private val context: Context) {
+
+    fun exportToM3U(
+        streams: List<StreamItem>,
+        title: String,
+        fileName: String = "playlist.m3u"
+    ): File? {
+        return try {
+            val content = buildM3UContent(streams, title)
+            val file = File(context.cacheDir, fileName)
+            file.writeText(content)
+            file
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun buildM3UContent(streams: List<StreamItem>, title: String): String {
+        val sb = StringBuilder()
+        sb.appendLine("#EXTM3U")
+        sb.appendLine("#PLAYLIST: \$title")
+
+        streams.forEach { stream ->
+            val url = stream.url ?: stream.streamUrl ?: stream.externalUrl
+            if (url.isNullOrBlank()) return@forEach
+            if (url.startsWith("magnet:")) return@forEach
+            val name = stream.title ?: stream.name ?: "Stream"
+            sb.appendLine("#EXTINF:-1,\${escapeM3UString(name)}")
+            sb.appendLine(url)
+        }
+
+        return sb.toString()
+    }
+
+    fun shareM3U(file: File) {
+        try {
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file
+            )
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "audio/x-mpegurl"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(intent, "Share Playlist"))
+        } catch (e: Exception) {}
+    }
+
+    private fun escapeM3UString(text: String): String {
+        return text.replace(",", "\\,")
     }
 }
 

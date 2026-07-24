@@ -32,7 +32,8 @@ class DetailsViewModel @Inject constructor(
     private val libraryDao: LibraryDao,
     private val watchlistDao: WatchlistDao,
     private val smartPlaylistDao: SmartPlaylistDao,
-    private val stremioApi: StremioApi
+    private val stremioApi: StremioApi,
+    private val linkVerifier: com.ultrastream.app.utils.LinkVerifier
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DetailsUiState())
@@ -90,20 +91,17 @@ class DetailsViewModel @Inject constructor(
             _availableSeasons.value = emptyList()
             return
         }
-        val filtered = mutableListOf<Video>()
         val seen = mutableSetOf<String>()
         val seasonMap = mutableMapOf<Int, MutableList<Video>>()
-        val junkPattern = Regex(
-            "opening|ending|creditless|ncop|nced|trailer|promo|teaser|ova|oav|special",
-            RegexOption.IGNORE_CASE
-        )
 
         episodes.forEach { ep ->
             if (ep.season == null || ep.episode == null) return@forEach
             if (ep.season == 0 || ep.episode == 0) return@forEach
             val name = ep.name ?: ep.title ?: ""
-            if (junkPattern.containsMatchIn(name)) return@forEach
+            
+            // ZERO AGGRESSIVE FILTERING: Only skip pure technical numbers without names
             if (listOf(480, 720, 1080, 2160, 264, 265).contains(ep.episode) && name.isBlank()) return@forEach
+            
             val key = "S${ep.season}E${ep.episode}"
             if (seen.contains(key)) return@forEach
             seen.add(key)
@@ -111,21 +109,6 @@ class DetailsViewModel @Inject constructor(
         }
 
         seasonMap.values.forEach { list -> list.sortBy { it.episode ?: 0 } }
-        // Remove outliers (gaps > 20)
-        seasonMap.values.forEach { seasonEpisodes ->
-            if (seasonEpisodes.size > 1) {
-                var prev = seasonEpisodes[0].episode ?: 0
-                val toRemove = mutableListOf<Video>()
-                for (i in 1 until seasonEpisodes.size) {
-                    val current = seasonEpisodes[i].episode ?: 0
-                    if (current > prev + 20) {
-                        toRemove.add(seasonEpisodes[i])
-                    }
-                    prev = current
-                }
-                seasonEpisodes.removeAll(toRemove)
-            }
-        }
 
         val all = seasonMap.keys.sorted().flatMap { seasonMap[it] ?: emptyList() }
         val seasons = all.mapNotNull { it.season }.distinct().sorted()
@@ -255,20 +238,10 @@ class DetailsViewModel @Inject constructor(
         return try {
             val episodes = meta.videos?.filter { it.season == season } ?: emptyList()
             if (episodes.isEmpty()) return false
-
-            val playlistEpisodes = episodes.map { ep ->
-                PlaylistEpisode(
-                    epNum = ep.episode ?: 0,
-                    epName = ep.name ?: "Episode ${ep.episode}",
-                    title = "${meta.name} - S${season}E${ep.episode}",
-                    stream = null,
-                    isMissing = true
-                )
-            }
-
-            val episodesJson = episodeAdapter.toJson(playlistEpisodes)
-            val playlist = SmartPlaylist(
-                id = "${meta.id}_S${season}_${System.currentTimeMillis()}",
+            
+            val playlistId = "${meta.id}_S${season}_${System.currentTimeMillis()}"
+            val initialPlaylist = SmartPlaylist(
+                id = playlistId,
                 metaId = meta.id,
                 metaName = meta.name,
                 poster = meta.poster,
@@ -276,11 +249,54 @@ class DetailsViewModel @Inject constructor(
                 addon = "SmartPlaylist",
                 total = episodes.size,
                 fetched = 0,
-                status = "Pending",
-                episodesJson = episodesJson
+                status = "Fetching...",
+                episodesJson = "[]"
             )
+            smartPlaylistDao.insert(initialPlaylist)
 
-            smartPlaylistDao.insert(playlist)
+            viewModelScope.launch {
+                val addons = addonRepository.getEnabledAddons().map { it.url }
+                val hindiPriority = preferencesManager.getHindiPriority().first()
+                val debridKey = preferencesManager.getDebridKey().first()
+                val fetchedEpisodes = mutableListOf<PlaylistEpisode>()
+
+                episodes.forEachIndexed { index, ep ->
+                    val epNum = ep.episode ?: 0
+                    // Get streams for this exact episode
+                    val streams = streamRepository.getStreams(
+                        meta.id, meta.type, season, epNum, addons, hindiPriority, debridKey.takeIf { it.isNotBlank() }
+                    )
+                    
+                    var bestWorkingStream: StreamItem? = null
+                    for (stream in streams) {
+                        val sUrl = stream.url ?: stream.streamUrl ?: stream.externalUrl
+                        if (sUrl != null && !sUrl.startsWith("magnet:")) {
+                            // Link is already passed through DebridHelper in repository, so we just verify
+                            if (linkVerifier.verifyLinkStatus(sUrl)) {
+                                bestWorkingStream = stream
+                                break
+                            }
+                        }
+                    }
+
+                    fetchedEpisodes.add(
+                        PlaylistEpisode(
+                            epNum = epNum,
+                            epName = ep.name ?: "Episode $epNum",
+                            title = "${meta.name} - S${season}E${epNum}",
+                            stream = bestWorkingStream,
+                            isMissing = bestWorkingStream == null
+                        )
+                    )
+
+                    val updatedPlaylist = initialPlaylist.copy(
+                        fetched = index + 1,
+                        status = if (index + 1 == episodes.size) "Ready" else "Fetching...",
+                        episodesJson = episodeAdapter.toJson(fetchedEpisodes)
+                    )
+                    smartPlaylistDao.update(updatedPlaylist)
+                }
+            }
             true
         } catch (e: Exception) {
             false

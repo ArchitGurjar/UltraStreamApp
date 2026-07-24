@@ -16,7 +16,7 @@ import javax.inject.Singleton
 class StreamRepository @Inject constructor(
     private val stremioApi: StremioApi,
     private val debridHelper: DebridHelper,
-    private val streamParser: StreamParser
+    private val linkVerifier: com.ultrastream.app.utils.LinkVerifier
 ) {
 
     suspend fun getStreams(
@@ -59,7 +59,14 @@ class StreamRepository @Inject constructor(
                             val addonName = extractAddonName(url)
                             val streamItem = convertStream(stream, addonName)
                             if (season != null && episode != null) {
-                                if (!streamParser.isValidEpisode(streamItem, season, episode)) {
+                                val textToCheck = buildString {
+                                    append(streamItem.title ?: "")
+                                    append(" ")
+                                    append(streamItem.name ?: "")
+                                    append(" ")
+                                    append(streamItem.description ?: "")
+                                }
+                                if (!com.ultrastream.app.utils.StreamParser.isValidEpisode(textToCheck, season, episode)) {
                                     return@mapNotNull null
                                 }
                             }
@@ -72,7 +79,7 @@ class StreamRepository @Inject constructor(
             }
             val results = deferred.awaitAll()
             val all = results.flatten()
-            streamParser.sortStreams(all, hindiPriority)
+            com.ultrastream.app.utils.StreamParser.sortStreams(all, hindiPriority)
         }
     }
 

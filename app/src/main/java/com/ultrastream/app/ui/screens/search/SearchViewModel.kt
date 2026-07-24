@@ -62,7 +62,7 @@ class SearchViewModel @Inject constructor(
                                 cat.extra?.any { it.name == "search" } == true)
                         } ?: continue
 
-                        val encodedQuery = URLEncoder.encode(query, "UTF-8")
+                        val encodedQuery = URLEncoder.encode(query, "UTF-8").replace("+", "%20")
                         val searchUrl = "$baseUrl/catalog/$type/${searchableCatalog.id}/search=$encodedQuery.json"
                         try {
                             val response = stremioApi.getCatalog(searchUrl)
