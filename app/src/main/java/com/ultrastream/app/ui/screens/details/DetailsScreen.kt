@@ -269,7 +269,7 @@ fun DetailsScreen(
                             // IMDb link (always visible)
                             OutlinedButton(
                                 onClick = {
-                                    val imdbId = meta.imdbId ?: meta.imdb_id
+                                    val imdbId = meta.imdbId
                                     if (!imdbId.isNullOrBlank()) {
                                         context.startActivity(
                                             Intent(Intent.ACTION_VIEW, Uri.parse("https://www.imdb.com/title/$imdbId"))
