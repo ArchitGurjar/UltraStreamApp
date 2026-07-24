@@ -62,6 +62,25 @@ fun HomeScreen(
                 }
             }
         }
+
+        // Recommended Addons
+        item {
+            SectionHeader(title = \"Recommended Addons\")
+            if (uiState.recommendedAddons.isEmpty()) {
+                Text(\"No recommendations\", modifier = Modifier.padding(horizontal = 16.dp))
+            } else {
+                HScrollRow {
+                    uiState.recommendedAddons.forEach { addon ->
+                        RecommendedAddonCard(
+                            addon = addon,
+                            onInstall = { url ->
+                                // TODO: trigger install via ViewModel
+                            }
+                        )
+                    }
+                }
+            }
+        }
             }
         }
 
