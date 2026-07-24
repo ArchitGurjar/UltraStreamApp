@@ -27,6 +27,4 @@ interface SmartPlaylistDao {
     @Query("DELETE FROM smart_playlists")
     suspend fun deleteAll()
 
-    @Update
-    suspend fun update(playlist: SmartPlaylist)
-}
+    }
