@@ -2,7 +2,6 @@ package com.ultrastream.app.utils
 
 import com.ultrastream.app.network.AllDebridApi
 import com.ultrastream.app.network.PremiumizeApi
-import com.ultrastream.app.network.*
 import com.ultrastream.app.network.RealDebridApi
 import kotlinx.coroutines.delay
 import javax.inject.Inject
@@ -96,7 +95,7 @@ class DebridHelper @Inject constructor(
             val magnet = "magnet:?xt=urn:btih:$url"
             return resolveAllDebridMagnet(magnet, apiKey)
         }
-        return applyDebridParams(url, apiKey) // AllDebrid uses similar param? but we'll just return as-is for direct links
+        return applyDebridParams(url, apiKey)
     }
 
     private suspend fun resolveAllDebridMagnet(magnet: String, apiKey: String): String {
@@ -104,27 +103,24 @@ class DebridHelper @Inject constructor(
         if (hash.isEmpty()) return magnet
 
         try {
-            // Step 1: Upload magnet
             val uploadResponse = allDebridApi.uploadMagnet(apiKey, magnet)
-            if (!uploadResponse.status || uploadResponse.id == null) {
+            if (uploadResponse.status != true || uploadResponse.data?.id == null) {
                 return magnet
             }
-            val torrentId = uploadResponse.id
+            val torrentId = uploadResponse.data.id
 
-            // Step 2: Wait for status to be "Completed"
-            var statusResponse: AllDebridStatusResponse
+            var statusResponse = allDebridApi.getMagnetStatus(apiKey, torrentId)
             var attempts = 0
-            do {
+            while (statusResponse.data?.magnets?.firstOrNull()?.status != "Completed" && attempts < 60) {
                 delay(2000)
                 statusResponse = allDebridApi.getMagnetStatus(apiKey, torrentId)
                 attempts++
-            } while (statusResponse.status != "Completed" && attempts < 60)
-
-            if (statusResponse.status == "Completed") {
-                // Step 3: Get link
+            }
+            val magnetItem = statusResponse.data?.magnets?.firstOrNull()
+            if (magnetItem?.status == "Completed") {
                 val linkResponse = allDebridApi.getMagnetLink(apiKey, torrentId)
-                if (linkResponse.status && linkResponse.link != null) {
-                    return linkResponse.link
+                if (linkResponse.status == true && linkResponse.data?.link != null) {
+                    return linkResponse.data.link
                 }
             }
             return magnet
@@ -150,31 +146,24 @@ class DebridHelper @Inject constructor(
         if (hash.isEmpty()) return magnet
 
         try {
-            // Step 1: Create transfer
             val transferResponse = premiumizeApi.createTransfer(apiKey, magnet)
-            if (!transferResponse.status || transferResponse.id == null) {
+            if (transferResponse.status != "success" || transferResponse.id == null) {
                 return magnet
             }
             val transferId = transferResponse.id
 
-            // Step 2: Wait for status to be "finished"
-            var statusResponse: PremiumizeStatusResponse
+            var statusResponse = premiumizeApi.getTransferStatus(apiKey, transferId)
             var attempts = 0
-            do {
+            while (statusResponse.transfers?.firstOrNull()?.status != "finished" && attempts < 60) {
                 delay(2000)
                 statusResponse = premiumizeApi.getTransferStatus(apiKey, transferId)
                 attempts++
-            } while (statusResponse.status != "finished" && attempts < 60)
-
-            if (statusResponse.status == "finished") {
-                // Step 3: Get download link
+            }
+            val transferItem = statusResponse.transfers?.firstOrNull()
+            if (transferItem?.status == "finished") {
                 val itemResponse = premiumizeApi.getItemDetails(apiKey, transferId)
-                if (itemResponse.status && itemResponse.content != null) {
-                    // Return first link
-                    val link = itemResponse.content.firstOrNull()?.link
-                    if (link != null) {
-                        return link
-                    }
+                if (itemResponse.status == "success" && itemResponse.link != null) {
+                    return itemResponse.link
                 }
             }
             return magnet

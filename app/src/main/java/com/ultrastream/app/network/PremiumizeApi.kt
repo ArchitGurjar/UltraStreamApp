@@ -6,30 +6,18 @@ import retrofit2.http.Query
 
 interface PremiumizeApi {
 
-    /**
-     * Create a new transfer for a magnet link.
-     * Endpoint: transfer/create
-     */
     @GET("transfer/create")
     suspend fun createTransfer(
         @Header("Authorization") auth: String,
         @Query("src") src: String
     ): PremiumizeTransferResponse
 
-    /**
-     * List all transfers and get status of a specific transfer.
-     * Endpoint: transfer/list
-     */
     @GET("transfer/list")
     suspend fun getTransferStatus(
         @Header("Authorization") auth: String,
         @Query("id") id: String
     ): PremiumizeStatusResponse
 
-    /**
-     * Get detailed information about a file or folder.
-     * Endpoint: item/details
-     */
     @GET("item/details")
     suspend fun getItemDetails(
         @Header("Authorization") auth: String,
@@ -37,9 +25,6 @@ interface PremiumizeApi {
     ): PremiumizeItemResponse
 }
 
-// ============================================================
-// CREATE TRANSFER RESPONSE
-// ============================================================
 data class PremiumizeTransferResponse(
     val status: String? = null,
     val id: String? = null,
@@ -47,9 +32,6 @@ data class PremiumizeTransferResponse(
     val message: String? = null
 )
 
-// ============================================================
-// STATUS / LIST RESPONSE
-// ============================================================
 data class PremiumizeStatusResponse(
     val status: String? = null,
     val message: String? = null,
@@ -81,9 +63,6 @@ data class PremiumizeFileInfo(
     val path: String? = null
 )
 
-// ============================================================
-// ITEM DETAILS RESPONSE
-// ============================================================
 data class PremiumizeItemResponse(
     val status: String? = null,
     val message: String? = null,
