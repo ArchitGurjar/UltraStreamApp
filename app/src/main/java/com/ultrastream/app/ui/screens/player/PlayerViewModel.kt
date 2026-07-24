@@ -424,4 +424,58 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
         initializePlayer(context, stream, title, subtitle)
     }
 
+
+    fun toggleLock() {
+        _isLocked.value = !_isLocked.value
+    }
+
+    fun toggleFullscreen() {
+        _isFullscreen.value = !_isFullscreen.value
+    }
+
+    fun seekBy(offsetMs: Long) {
+        _player.value?.let { player ->
+            val newPos = player.currentPosition + offsetMs
+            player.seekTo(newPos.coerceIn(0, player.duration))
+            viewModelScope.launch {
+                _seekMessage.value = if (offsetMs > 0) "+${offsetMs/1000}s" else "-${-offsetMs/1000}s"
+                delay(800)
+                _seekMessage.value = null
+            }
+        }
+    }
+
+    fun selectQuality(quality: Quality) {
+        // Implementation depends on track selection; we'll keep a placeholder.
+        // For actual quality switching, we need to map quality to track selection.
+        // This will be implemented in the listener.
+    }
+
+    fun selectSubtitle(track: SubtitleTrack) {
+        val player = _player.value ?: return
+        // Disable all text tracks first, then enable the selected one.
+        val params = player.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
+            .build()
+        player.trackSelectionParameters = params
+        // Use the track index to select.
+        // We'll store the selected track and apply in onTracksChanged.
+        // For now, we store it.
+        _selectedSubtitleIndex.value = track.index
+        // Apply selection by using TrackSelectionOverride.
+        // We need to get the actual track group.
+        // We'll implement in the listener.
+    }
+
+    fun disableSubtitles() {
+        val player = _player.value ?: return
+        val params = player.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
+            .build()
+        player.trackSelectionParameters = params
+        _selectedSubtitleIndex.value = -1
+    }
+
+    private val _selectedSubtitleIndex = MutableStateFlow(-1)
+
 }
