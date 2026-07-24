@@ -6,11 +6,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,6 +20,7 @@ import com.ultrastream.app.data.models.RecommendedAddon
 import com.ultrastream.app.ui.components.RecommendedAddonCard
 import com.ultrastream.app.ui.components.HScrollRow
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddonsScreen(
     viewModel: AddonsViewModel = hiltViewModel()
@@ -48,7 +44,7 @@ fun AddonsScreen(
             Text("Addons", style = MaterialTheme.typography.headlineMedium)
         }
         
-        // 1. FIXED: Addon URL Installation Box (Strictly Single Line)
+        // Addon URL Installation Box
         item {
             OutlinedTextField(
                 value = addonUrl,
@@ -68,7 +64,7 @@ fun AddonsScreen(
                             addonUrl = ""
                             Toast.makeText(context, "✅ Addon Installed!", Toast.LENGTH_SHORT).show()
                         } else {
-                            Toast.makeText(context, "❌ Install Failed: Server blocked or invalid format.", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, "❌ Install Failed", Toast.LENGTH_LONG).show()
                         }
                     }
                 },
@@ -78,8 +74,7 @@ fun AddonsScreen(
             }
         }
 
-        
-        // Recommended Addons
+        // Recommended Addons (Single Block)
         item {
             Text("Recommended Addons", style = MaterialTheme.typography.titleMedium)
             val recommended = listOf(
@@ -110,42 +105,9 @@ fun AddonsScreen(
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        
-        // Recommended Addons
-        item {
-            Text("Recommended Addons", style = MaterialTheme.typography.titleMedium)
-            val recommended = listOf(
-                RecommendedAddon("Torrentio", "Torrent scraper", "https://torrentio.strem.fun/manifest.json"),
-                RecommendedAddon("Cinemeta", "Metadata provider", "https://cinemeta.strem.fun/manifest.json"),
-                RecommendedAddon("Juan Carlos 2", "4K sources", "https://juan-carlos.strem.fun/manifest.json"),
-                RecommendedAddon("Orion", "Premium scraper", "https://orion.strem.fun/manifest.json")
-            )
-            HScrollRow {
-                recommended.forEach { addon ->
-                    RecommendedAddonCard(
-                        addon = addon,
-                        onInstall = { url ->
-                            scope.launch {
-                                addonUrl = url
-                                val success = viewModel.installAddon(url)
-                                if (success) {
-                                    addonUrl = ""
-                                    Toast.makeText(context, "✅ Addon Installed!", Toast.LENGTH_SHORT).show()
-                                } else {
-                                    Toast.makeText(context, "❌ Install Failed", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        }
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-
-        // 2. Import & Export JSON Array
+        // Sync / Backup
         item {
             Text("Sync / Backup", style = MaterialTheme.typography.titleMedium)
-            
             OutlinedTextField(
                 value = jsonInputText,
                 onValueChange = { jsonInputText = it },
@@ -154,9 +116,7 @@ fun AddonsScreen(
                 minLines = 3,
                 maxLines = 5
             )
-            
             Spacer(modifier = Modifier.height(8.dp))
-
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 Button(
                     onClick = {
@@ -193,7 +153,7 @@ fun AddonsScreen(
             }
         }
 
-        // 3. Debrid Settings
+        // Debrid Settings
         item {
             Text("Real-Debrid Key", style = MaterialTheme.typography.titleMedium)
             OutlinedTextField(
@@ -215,6 +175,9 @@ fun AddonsScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Save Debrid Key")
+            }
+        }
+
         // Debrid Provider
         item {
             Text("Debrid Provider", style = MaterialTheme.typography.titleMedium)
@@ -251,10 +214,8 @@ fun AddonsScreen(
             }
             Spacer(modifier = Modifier.height(8.dp))
         }
-            }
-        }
 
-        // 4. Installed Addons List
+        // Installed Addons List
         item {
             Text("Installed Addons (${uiState.addons.size})", style = MaterialTheme.typography.titleMedium)
         }

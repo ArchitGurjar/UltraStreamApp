@@ -33,19 +33,26 @@ class AddonsViewModel @Inject constructor(
         observeDebridProvider()
     }
 
-    fun loadAddons() {
-        viewModelScope.launch {
-            val addons = addonRepository.getAllAddons()
-            _uiState.value = _uiState.value.copy(addons = addons)
-        }
-    }
-
-    private fun observeDebridKey()
-        observeDebridProvider() {
+    private fun observeDebridKey() {
         viewModelScope.launch {
             preferencesManager.getDebridKey().collect { key ->
                 _uiState.value = _uiState.value.copy(debridKey = key)
             }
+        }
+    }
+
+    private fun observeDebridProvider() {
+        viewModelScope.launch {
+            preferencesManager.getDebridProvider().collect { provider ->
+                _uiState.value = _uiState.value.copy(debridProvider = provider)
+            }
+        }
+    }
+
+    fun loadAddons() {
+        viewModelScope.launch {
+            val addons = addonRepository.getAllAddons()
+            _uiState.value = _uiState.value.copy(addons = addons)
         }
     }
 
@@ -56,12 +63,9 @@ class AddonsViewModel @Inject constructor(
         } else if (!safeUrl.startsWith("http")) {
             safeUrl = "https://$safeUrl"
         }
-        
-        // Remove trailing slashes if accidentally pasted
         if (safeUrl.endsWith("/")) {
             safeUrl = safeUrl.dropLast(1)
         }
-        
         val addon = addonRepository.installAddon(safeUrl)
         if (addon != null) {
             loadAddons()
@@ -85,12 +89,19 @@ class AddonsViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(debridKey = key)
     }
 
+    suspend fun saveDebridProvider(provider: String) {
+        preferencesManager.setDebridProvider(provider)
+        _uiState.value = _uiState.value.copy(debridProvider = provider)
+    }
+
     fun exportAddonsJson(): String {
         return try {
             val addons = _uiState.value.addons
             val exportList = addons.map {
-                val catAdapter = moshi.adapter<List<Catalog>>(Types.newParameterizedType(List::class.java, Catalog::class.java))
-                val parsedCatalogs = try { catAdapter.fromJson(it.catalogs) } catch(e:Exception) { emptyList() }
+                val catAdapter = moshi.adapter<List<Catalog>>(
+                    Types.newParameterizedType(List::class.java, Catalog::class.java)
+                )
+                val parsedCatalogs = try { catAdapter.fromJson(it.catalogs) } catch (e: Exception) { emptyList() }
                 StremioAddonExport(it.id, it.url, it.name, parsedCatalogs, it.enabled, it.required)
             }
             val type = Types.newParameterizedType(List::class.java, StremioAddonExport::class.java)
@@ -106,7 +117,9 @@ class AddonsViewModel @Inject constructor(
             val importList = moshi.adapter<List<StremioAddonExport>>(type).fromJson(json) ?: return false
 
             val newAddons = importList.map {
-                val catAdapter = moshi.adapter<List<Catalog>>(Types.newParameterizedType(List::class.java, Catalog::class.java))
+                val catAdapter = moshi.adapter<List<Catalog>>(
+                    Types.newParameterizedType(List::class.java, Catalog::class.java)
+                )
                 val catsJson = catAdapter.toJson(it.catalogs ?: emptyList())
                 Addon(it.id, it.url, it.name, catsJson, it.enabled, it.required)
             }
@@ -120,23 +133,9 @@ class AddonsViewModel @Inject constructor(
 
     data class AddonsUiState(
         val addons: List<Addon> = emptyList(),
-        val debridKey: String = ""
+        val debridKey: String = "",
+        val debridProvider: String = "realdebrid"
     )
-
-    private fun observeDebridProvider() {
-        viewModelScope.launch {
-            preferencesManager.getDebridProvider().collect { provider ->
-                _uiState.value = _uiState.value.copy(debridProvider = provider)
-            }
-        }
-    }
-
-
-    suspend fun saveDebridProvider(provider: String) {
-        preferencesManager.setDebridProvider(provider)
-        _uiState.value = _uiState.value.copy(debridProvider = provider)
-    }
-
 }
 
 data class StremioAddonExport(
