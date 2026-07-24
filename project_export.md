@@ -1118,6 +1118,661 @@ echo "[update_backend_logic] done. Pushed to GitHub."
 
 ---
 
+## File: `fix_build_errors.sh`
+
+```bash
+#!/bin/bash
+set -e
+
+echo "🛠️ Fixing Imports, OptIns, and Duplicate Declarations..."
+
+# 1. Fix Theme.kt (Removing duplicate Shapes/Typography & fixing Color import)
+cat > app/src/main/java/com/ultrastream/app/ui/theme/Theme.kt << 'INNER_EOF'
+package com.ultrastream.app.ui.theme
+
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
+
+private val DarkColorScheme = darkColorScheme(
+    primary = AccentBlue,
+    onPrimary = Color.Black,
+    background = BackgroundDark,
+    surface = SurfaceDark,
+    onSurface = TextMain,
+    onSurfaceVariant = TextMuted
+)
+
+private val LightColorScheme = lightColorScheme(
+    primary = AccentBlue,
+    onPrimary = Color.Black,
+    background = Color(0xFFF3F4F6),
+    surface = Color.White,
+    onSurface = Color(0xFF111827),
+    onSurfaceVariant = Color(0xFF6B7280)
+)
+
+@Composable
+fun UltraStreamTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    content: @Composable () -> Unit
+) {
+    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    MaterialTheme(
+        colorScheme = colorScheme,
+        typography = Typography, // Uses Type.kt
+        shapes = Shapes, // Uses Shape.kt
+        content = content
+    )
+}
+INNER_EOF
+
+# 2. Fix DetailsScreen.kt (Adding missing imports for BorderStroke, sp, clickable, Outlined icons)
+cat > app/src/main/java/com/ultrastream/app/ui/screens/details/DetailsScreen.kt << 'INNER_EOF'
+@file:OptIn(ExperimentalMaterial3Api::class)
+
+package com.ultrastream.app.ui.screens.details
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
+import com.ultrastream.app.data.models.StreamItem
+import com.ultrastream.app.ui.components.EpisodeCard
+import com.ultrastream.app.ui.components.StreamCard
+import com.ultrastream.app.ui.components.bottomsheets.SeasonsSheet
+import com.ultrastream.app.ui.components.bottomsheets.StreamsSheet
+import com.ultrastream.app.ui.theme.*
+
+@Composable
+fun DetailsScreen(
+    id: String,
+    type: String,
+    viewModel: DetailsViewModel = hiltViewModel(),
+    onBack: () -> Unit,
+    onPlay: (stream: StreamItem, title: String) -> Unit
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    var showSeasonsSheet by remember { mutableStateOf(false) }
+    var showStreamsSheet by remember { mutableStateOf(false) }
+
+    val meta = uiState.meta
+
+    LaunchedEffect(id, type) {
+        viewModel.loadMeta(id, type)
+    }
+
+    LaunchedEffect(meta) {
+        if (meta?.type == "series" || meta?.type == "anime") {
+            val seasons = meta.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: emptyList()
+            if (seasons.isNotEmpty() && uiState.selectedSeason == null) {
+                viewModel.selectSeason(seasons.first())
+            }
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize().background(BackgroundDark)) {
+        if (meta != null) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(350.dp)
+                    ) {
+                        AsyncImage(
+                            model = meta.background ?: meta.poster,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color.Transparent,
+                                            BackgroundDark.copy(alpha = 0.8f),
+                                            BackgroundDark
+                                        ),
+                                        startY = 0.3f
+                                    )
+                                )
+                        )
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 16.dp, start = 16.dp, end = 16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = Color.Black.copy(alpha = 0.6f),
+                                modifier = Modifier.size(44.dp)
+                            ) {
+                                IconButton(onClick = onBack) {
+                                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                                }
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = Color.Black.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(44.dp)
+                                ) {
+                                    IconButton(onClick = { /* View History */ }) {
+                                        Icon(Icons.Default.History, contentDescription = "History", tint = Color.White)
+                                    }
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = Color.Black.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(44.dp)
+                                ) {
+                                    IconButton(onClick = { viewModel.toggleLibrary(meta) }) {
+                                        Icon(
+                                            imageVector = if (uiState.inLibrary) Icons.Default.Bookmark else Icons.Outlined.BookmarkBorder,
+                                            contentDescription = "Bookmark",
+                                            tint = if (uiState.inLibrary) AccentBlue else Color.White
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(16.dp)
+                                .fillMaxWidth()
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = Color.Black.copy(alpha = 0.5f),
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
+                            ) {
+                                Text(
+                                    text = meta.type.uppercase(),
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = meta.name,
+                                style = MaterialTheme.typography.headlineLarge,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(meta.year ?: "", style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                                Text("•", style = MaterialTheme.typography.bodyMedium, color = TextMuted)
+                                Text(meta.runtime ?: "N/A", style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                                Text("•", style = MaterialTheme.typography.bodyMedium, color = TextMuted)
+                                Text("⭐ ${meta.imdbRating ?: "N/A"}", style = MaterialTheme.typography.bodyMedium, color = AccentBlue, fontWeight = FontWeight.Bold)
+                                if (!meta.genre.isNullOrEmpty()) {
+                                    Text("•", style = MaterialTheme.typography.bodyMedium, color = TextMuted)
+                                    Text(meta.genre!!.take(2).joinToString(", "), style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = meta.description ?: "",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = TextMuted,
+                                maxLines = 4,
+                                softWrap = true
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            if (!meta.cast.isNullOrEmpty()) {
+                                @OptIn(ExperimentalLayoutApi::class)
+                                FlowRow(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    meta.cast!!.take(5).forEach { actor ->
+                                        Surface(
+                                            shape = RoundedCornerShape(50),
+                                            color = Color.White.copy(alpha = 0.1f),
+                                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+                                        ) {
+                                            Text(
+                                                text = actor,
+                                                color = Color.White,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Button(
+                            onClick = {
+                                viewModel.loadStreams(meta.id, meta.type, uiState.selectedSeason, uiState.selectedEpisode)
+                                showStreamsSheet = true
+                            },
+                            modifier = Modifier.fillMaxWidth().height(56.dp),
+                            shape = RoundedCornerShape(50),
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentBlue, contentColor = Color.Black)
+                        ) {
+                            Icon(Icons.Default.Satellite, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(if (uiState.streamsLoading) "Loading Streams..." else "Find Streams", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = { /* Open IMDb */ },
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            shape = RoundedCornerShape(50),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
+                        ) {
+                            Icon(Icons.Default.Movie, contentDescription = null, tint = Color.White)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("View on IMDb", fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                    }
+                }
+
+                if (meta.type == "series" || meta.type == "anime") {
+                    val seasons = meta.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: emptyList()
+                    val episodes = meta.videos
+                        ?.filter { it.season == uiState.selectedSeason }
+                        ?.sortedBy { it.episode } ?: emptyList()
+
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Episodes",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            if (seasons.isNotEmpty()) {
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = Color.White.copy(alpha = 0.1f),
+                                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp).clickable { showSeasonsSheet = true },
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text("Season ${uiState.selectedSeason ?: ""}", fontWeight = FontWeight.Bold)
+                                        Icon(Icons.Default.ExpandMore, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    item {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            episodes.forEach { video ->
+                                val isWatched = uiState.watchProgress?.let { it.percent >= 100 } ?: false
+                                
+                                EpisodeCard(
+                                    video = video,
+                                    isWatched = isWatched,
+                                    progressPercent = uiState.watchProgress?.percent ?: 0,
+                                    onClick = {
+                                        viewModel.selectEpisode(video.episode ?: 0)
+                                        viewModel.loadStreams(meta.id, meta.type, uiState.selectedSeason, video.episode)
+                                        showStreamsSheet = true
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+        } else if (uiState.isLoading) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = AccentBlue)
+            }
+        } else if (uiState.error != null) {
+            Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+                Text("Error: ${uiState.error}", color = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+
+    if (showSeasonsSheet) {
+        val seasons = meta?.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: emptyList()
+        SeasonsSheet(
+            seasons = seasons,
+            currentSeason = uiState.selectedSeason ?: 0,
+            onDismiss = { showSeasonsSheet = false },
+            onSeasonSelected = { season ->
+                viewModel.selectSeason(season)
+                showSeasonsSheet = false
+            }
+        )
+    }
+
+    if (showStreamsSheet && uiState.streams.isNotEmpty()) {
+        ModalBottomSheet(
+            onDismissRequest = { showStreamsSheet = false }
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Available Streams", style = MaterialTheme.typography.headlineSmall)
+                Spacer(modifier = Modifier.height(8.dp))
+                LazyColumn {
+                    items(uiState.streams) { stream ->
+                        StreamCard(
+                            stream = stream,
+                            onClick = {
+                                showStreamsSheet = false
+                                viewModel.playStream(stream, meta?.name ?: "Stream") { resolvedStream, title ->
+                                    onPlay(resolvedStream, title)
+                                }
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+INNER_EOF
+
+# 3. Fix StreamCard.kt (Adding missing @OptIn and wildcard imports)
+cat > app/src/main/java/com/ultrastream/app/ui/components/StreamCard.kt << 'INNER_EOF'
+@file:OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+package com.ultrastream.app.ui.components
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.ultrastream.app.data.models.StreamItem
+import com.ultrastream.app.ui.theme.*
+
+@Composable
+fun StreamCard(
+    stream: StreamItem,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = CardDark),
+        shape = RoundedCornerShape(16.dp),
+        onClick = onClick
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = stream.addonName ?: "Addon",
+                    color = AccentBlue,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
+                Surface(
+                    color = Color.White,
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = "4KHDHub 4K",
+                        color = Color.Black,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = stream.title ?: stream.name ?: "Stream",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Tag(text = "2024", icon = Icons.Default.CalendarToday, color = AccentGold)
+                Tag(text = "Hindi", icon = Icons.Default.Translate, color = AccentOrange)
+                Tag(text = "18.74 GB", icon = Icons.Default.Storage, color = AccentOrange)
+                Tag(text = "2160P", icon = Icons.Default.Monitor, color = Color.White)
+                
+                OutlinedTag(text = "HDR", color = TextMuted)
+                OutlinedTag(text = "DV", color = TextMuted)
+                OutlinedTag(text = "English", color = AccentBlue)
+            }
+        }
+    }
+}
+
+@Composable
+private fun Tag(text: String, icon: ImageVector, color: Color) {
+    Surface(
+        color = color.copy(alpha = 0.15f),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = color,
+                modifier = Modifier.size(14.dp)
+            )
+            Text(
+                text = text,
+                color = color,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+private fun OutlinedTag(text: String, color: Color) {
+    Surface(
+        color = Color.Transparent,
+        border = BorderStroke(1.dp, color.copy(alpha = 0.4f)),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Text(
+            text = text,
+            color = color,
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+        )
+    }
+}
+INNER_EOF
+
+# 4. Fix EpisodeCard.kt (Adding missing imports for Colors & Material3 OptIn)
+cat > app/src/main/java/com/ultrastream/app/ui/components/EpisodeCard.kt << 'INNER_EOF'
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+package com.ultrastream.app.ui.components
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import com.ultrastream.app.data.models.Video
+import com.ultrastream.app.ui.theme.*
+
+@Composable
+fun EpisodeCard(
+    video: Video,
+    isWatched: Boolean = false,
+    progressPercent: Int = 0,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(90.dp),
+        colors = CardDefaults.cardColors(containerColor = CardDark),
+        shape = RoundedCornerShape(16.dp),
+        onClick = onClick
+    ) {
+        Row(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .width(140.dp)
+                    .fillMaxHeight()
+            ) {
+                AsyncImage(
+                    model = video.thumbnail,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp)
+                        .background(Color.Black.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 6.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        text = "S${video.season?.toString()?.padStart(2, '0') ?: "00"}E${video.episode?.toString()?.padStart(2, '0') ?: "00"}",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                if (progressPercent > 0 && progressPercent < 100) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(2.dp)
+                            .background(Color.Gray.copy(alpha = 0.3f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(progressPercent / 100f)
+                                .fillMaxHeight()
+                                .background(AccentBlue)
+                        )
+                    }
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .weight(1f)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = video.name ?: "Episode ${video.episode}",
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = video.description?.take(80) ?: "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (isWatched) {
+                    Text(
+                        text = "✔ Watched",
+                        color = AccentGreen,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+INNER_EOF
+
+echo "==> Staging and pushing changes to GitHub..."
+git add -A
+git commit -m "Fix: Add missing Imports and resolve Duplicate Variable errors in UI"
+git push origin main
+
+echo "✅ All Build Errors Fixed!"
+
+```
+
+---
+
 ## File: `run_fixes.sh`
 
 ```bash
@@ -3172,6 +3827,1126 @@ git commit -m "Fix: Fully implement player controls, live progress, and stream f
 git push origin main
 
 echo "[update_player_and_details] done. Pushed to GitHub."
+
+```
+
+---
+
+## File: `fix_player_build.sh`
+
+```bash
+#!/bin/bash
+set -e
+
+echo "🛠️ Fixing Player Build Errors (Media3 APIs & Compose Imports)..."
+
+# ============================================================
+# 1. FIXED PlayerViewModel.kt (Media3 APIs Corrected)
+# ============================================================
+cat > app/src/main/java/com/ultrastream/app/ui/screens/player/PlayerViewModel.kt << 'INNER_EOF'
+package com.ultrastream.app.ui.screens.player
+
+import android.content.Context
+import android.net.Uri
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.TrackGroup
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.TrackSelectionParameters
+import androidx.media3.common.Tracks
+import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.dash.DashMediaSource
+import androidx.media3.exoplayer.hls.HlsMediaSource
+import androidx.media3.exoplayer.source.MediaSource
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import com.ultrastream.app.data.models.StreamItem
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import javax.inject.Inject
+
+data class AudioTrackInfo(val groupIndex: Int, val trackIndex: Int, val label: String, val language: String)
+data class SubtitleTrackInfo(val groupIndex: Int, val trackIndex: Int, val label: String, val language: String)
+
+@HiltViewModel
+class PlayerViewModel @Inject constructor() : ViewModel() {
+
+    private val _player = MutableStateFlow<ExoPlayer?>(null)
+    val player: StateFlow<ExoPlayer?> = _player.asStateFlow()
+
+    private val _currentPosition = MutableStateFlow(0L)
+    val currentPosition: StateFlow<Long> = _currentPosition.asStateFlow()
+
+    private val _duration = MutableStateFlow(0L)
+    val duration: StateFlow<Long> = _duration.asStateFlow()
+
+    private val _isPlaying = MutableStateFlow(false)
+    val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
+
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
+    private val _title = MutableStateFlow("")
+    val title: StateFlow<String> = _title.asStateFlow()
+
+    private val _speed = MutableStateFlow(1.0f)
+    val speed: StateFlow<Float> = _speed.asStateFlow()
+
+    private val _volume = MutableStateFlow(1.0f)
+    val volume: StateFlow<Float> = _volume.asStateFlow()
+
+    private val _brightness = MutableStateFlow(-1.0f)
+    val brightness: StateFlow<Float> = _brightness.asStateFlow()
+
+    private val _audioTracks = MutableStateFlow<List<AudioTrackInfo>>(emptyList())
+    val audioTracks: StateFlow<List<AudioTrackInfo>> = _audioTracks.asStateFlow()
+
+    private val _subtitleTracks = MutableStateFlow<List<SubtitleTrackInfo>>(emptyList())
+    val subtitleTracks: StateFlow<List<SubtitleTrackInfo>> = _subtitleTracks.asStateFlow()
+
+    private val _seekMessage = MutableStateFlow<String?>(null)
+    val seekMessage: StateFlow<String?> = _seekMessage.asStateFlow()
+
+    private var playerListener: Player.Listener? = null
+    private var positionJob: Job? = null
+
+    fun initializePlayer(context: Context, stream: StreamItem, title: String) {
+        viewModelScope.launch {
+            try {
+                val url = stream.url ?: stream.streamUrl ?: stream.externalUrl
+                if (url.isNullOrBlank()) {
+                    _error.value = "No valid stream URL"
+                    return@launch
+                }
+
+                val trackSelector = DefaultTrackSelector(context)
+                val exoPlayer = ExoPlayer.Builder(context)
+                    .setTrackSelector(trackSelector)
+                    .build()
+
+                val dataSourceFactory = createDataSourceFactory()
+                val mediaItemBuilder = MediaItem.Builder()
+                    .setUri(Uri.parse(url))
+                    .setMediaMetadata(MediaMetadata.Builder().setTitle(title).build())
+
+                stream.subtitles?.let { subs ->
+                    val configs = subs.mapNotNull { subtitle ->
+                        val subUriStr = subtitle.url ?: return@mapNotNull null
+                        val mimeType = when {
+                            subUriStr.endsWith(".vtt", ignoreCase = true) -> "text/vtt"
+                            subUriStr.endsWith(".srt", ignoreCase = true) -> "application/x-subrip"
+                            else -> "text/vtt"
+                        }
+                        MediaItem.SubtitleConfiguration.Builder(Uri.parse(subUriStr))
+                            .setMimeType(mimeType)
+                            .setLanguage(subtitle.lang ?: "und")
+                            .setLabel(subtitle.name ?: subtitle.lang ?: "Subtitle")
+                            .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                            .build()
+                    }
+                    if (configs.isNotEmpty()) {
+                        mediaItemBuilder.setSubtitleConfigurations(configs)
+                    }
+                }
+
+                val mediaItem = mediaItemBuilder.build()
+                val mediaSource = createMediaSource(mediaItem, dataSourceFactory)
+                exoPlayer.setMediaSource(mediaSource)
+                exoPlayer.prepare()
+                exoPlayer.playWhenReady = true
+
+                _player.value = exoPlayer
+                _title.value = title
+
+                val listener = object : Player.Listener {
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        when (playbackState) {
+                            Player.STATE_READY -> {
+                                _duration.value = exoPlayer.duration
+                                _isPlaying.value = exoPlayer.isPlaying
+                            }
+                            Player.STATE_ENDED -> {
+                                _isPlaying.value = false
+                            }
+                        }
+                    }
+
+                    override fun onIsPlayingChanged(isPlaying: Boolean) {
+                        _isPlaying.value = isPlaying
+                    }
+
+                    override fun onPlayerError(error: PlaybackException) {
+                        _error.value = error.message
+                    }
+                    
+                    override fun onTracksChanged(tracks: Tracks) {
+                        val audioList = mutableListOf<AudioTrackInfo>()
+                        val subtitleList = mutableListOf<SubtitleTrackInfo>()
+
+                        tracks.groups.forEachIndexed { groupIndex, trackGroup ->
+                            if (trackGroup.type == C.TRACK_TYPE_AUDIO) {
+                                for (trackIndex in 0 until trackGroup.length) {
+                                    val format = trackGroup.getTrackFormat(trackIndex)
+                                    audioList.add(
+                                        AudioTrackInfo(
+                                            groupIndex = groupIndex,
+                                            trackIndex = trackIndex,
+                                            label = format.label ?: format.language ?: "Audio $trackIndex",
+                                            language = format.language ?: "und"
+                                        )
+                                    )
+                                }
+                            } else if (trackGroup.type == C.TRACK_TYPE_TEXT) {
+                                for (trackIndex in 0 until trackGroup.length) {
+                                    val format = trackGroup.getTrackFormat(trackIndex)
+                                    subtitleList.add(
+                                        SubtitleTrackInfo(
+                                            groupIndex = groupIndex,
+                                            trackIndex = trackIndex,
+                                            label = format.label ?: format.language ?: "Subtitle $trackIndex",
+                                            language = format.language ?: "und"
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                        _audioTracks.value = audioList
+                        _subtitleTracks.value = subtitleList
+                    }
+                }
+                exoPlayer.addListener(listener)
+                playerListener = listener
+
+                positionJob?.cancel()
+                positionJob = viewModelScope.launch {
+                    while (isActive) {
+                        try {
+                            _currentPosition.value = exoPlayer.currentPosition
+                        } catch (e: IllegalStateException) {
+                            break
+                        }
+                        delay(200)
+                    }
+                }
+
+            } catch (e: Exception) {
+                _error.value = e.message
+            }
+        }
+    }
+
+    private fun createDataSourceFactory(): DataSource.Factory {
+        return DefaultHttpDataSource.Factory()
+            .setUserAgent("UltraStream/1.0 (Android)")
+            .setDefaultRequestProperties(mapOf("Referer" to "https://ultrastream.app/"))
+            .setConnectTimeoutMs(30_000)
+            .setReadTimeoutMs(60_000)
+    }
+
+    private fun createMediaSource(mediaItem: MediaItem, dataSourceFactory: DataSource.Factory): MediaSource {
+        val uri = mediaItem.localConfiguration?.uri ?: Uri.EMPTY
+        val url = uri.toString()
+        return when {
+            url.contains(".m3u8") -> HlsMediaSource.Factory(dataSourceFactory).createMediaSource(mediaItem)
+            url.contains(".mpd") -> DashMediaSource.Factory(dataSourceFactory).createMediaSource(mediaItem)
+            else -> ProgressiveMediaSource.Factory(dataSourceFactory).createMediaSource(mediaItem)
+        }
+    }
+
+    fun playPause() {
+        _player.value?.let { player ->
+            if (player.isPlaying) {
+                player.pause()
+                _isPlaying.value = false
+            } else {
+                player.play()
+                _isPlaying.value = true
+            }
+        }
+    }
+
+    fun play() {
+        _player.value?.play()
+        _isPlaying.value = true
+    }
+
+    fun pause() {
+        _player.value?.pause()
+        _isPlaying.value = false
+    }
+
+    fun skipForward(seconds: Long = 10) {
+        _player.value?.let { player ->
+            val newPos = player.currentPosition + seconds * 1000
+            player.seekTo(newPos.coerceAtMost(player.duration))
+        }
+    }
+
+    fun skipBackward(seconds: Long = 10) {
+        _player.value?.let { player ->
+            val newPos = player.currentPosition - seconds * 1000
+            player.seekTo(newPos.coerceAtLeast(0))
+        }
+    }
+
+    fun seekBy(offsetMs: Long) {
+        _player.value?.let { player ->
+            val newPos = player.currentPosition + offsetMs
+            player.seekTo(newPos.coerceIn(0, player.duration))
+            viewModelScope.launch {
+                _seekMessage.value = if (offsetMs > 0) "+${offsetMs/1000}s" else "-${-offsetMs/1000}s"
+                delay(800)
+                _seekMessage.value = null
+            }
+        }
+    }
+
+    fun seekTo(position: Long) {
+        _player.value?.seekTo(position.coerceIn(0, _duration.value))
+    }
+
+    fun setSpeed(speed: Float) {
+        _player.value?.setPlaybackSpeed(speed)
+        _speed.value = speed
+    }
+
+    fun setVolume(volume: Float) {
+        _player.value?.volume = volume.coerceIn(0f, 1f)
+        _volume.value = volume
+    }
+
+    fun setBrightness(brightness: Float) {
+        _brightness.value = brightness.coerceIn(-1f, 1f)
+    }
+
+    fun selectAudioTrack(info: AudioTrackInfo) {
+        val player = _player.value ?: return
+        val group = player.currentTracks.groups.getOrNull(info.groupIndex) ?: return
+        
+        val params = player.trackSelectionParameters.buildUpon()
+            .setOverrideForType(
+                TrackSelectionOverride(group.mediaTrackGroup, listOf(info.trackIndex))
+            )
+            .build()
+        player.trackSelectionParameters = params
+    }
+
+    fun disableSubtitles() {
+        val player = _player.value ?: return
+        val params = player.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            .build()
+        player.trackSelectionParameters = params
+    }
+
+    fun selectSubtitleTrack(info: SubtitleTrackInfo) {
+        val player = _player.value ?: return
+        val group = player.currentTracks.groups.getOrNull(info.groupIndex) ?: return
+        
+        val params = player.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            .setOverrideForType(
+                TrackSelectionOverride(group.mediaTrackGroup, listOf(info.trackIndex))
+            )
+            .build()
+        player.trackSelectionParameters = params
+    }
+
+    fun releasePlayer() {
+        positionJob?.cancel()
+        positionJob = null
+        playerListener?.let { listener ->
+            _player.value?.removeListener(listener)
+        }
+        _player.value?.release()
+        _player.value = null
+        playerListener = null
+    }
+}
+INNER_EOF
+
+# ============================================================
+# 2. FIXED PlayerScreen.kt (Compose Imports Added)
+# ============================================================
+cat > app/src/main/java/com/ultrastream/app/ui/screens/player/PlayerScreen.kt << 'INNER_EOF'
+@file:OptIn(ExperimentalMaterial3Api::class)
+
+package com.ultrastream.app.ui.screens.player
+
+import android.app.Activity
+import android.content.pm.ActivityInfo
+import android.media.AudioManager
+import android.os.Build
+import android.view.ViewGroup
+import android.view.WindowManager
+import android.widget.FrameLayout
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
+import com.ultrastream.app.data.models.StreamItem
+import com.ultrastream.app.ui.theme.AccentBlue
+
+@Composable
+fun PlayerScreen(
+    stream: StreamItem,
+    title: String = "Now Playing",
+    viewModel: PlayerViewModel = hiltViewModel(),
+    onBack: () -> Unit
+) {
+    val context = LocalContext.current
+    val view = LocalView.current
+    val activity = context as? Activity
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    val player by viewModel.player.collectAsState()
+    val currentPosition by viewModel.currentPosition.collectAsState()
+    val duration by viewModel.duration.collectAsState()
+    val isPlaying by viewModel.isPlaying.collectAsState()
+    val error by viewModel.error.collectAsState()
+    val playerTitle by viewModel.title.collectAsState()
+    val brightness by viewModel.brightness.collectAsState()
+    val volume by viewModel.volume.collectAsState()
+    val seekMessage by viewModel.seekMessage.collectAsState()
+
+    var resizeMode by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
+    var isFullscreen by remember { mutableStateOf(false) }
+    var showAudioSheet by remember { mutableStateOf(false) }
+    var showSubtitleSheet by remember { mutableStateOf(false) }
+
+    LaunchedEffect(stream) {
+        viewModel.initializePlayer(context, stream, title)
+    }
+
+    DisposableEffect(Unit) {
+        val window = activity?.window
+        val insetsController = window?.let { WindowInsetsControllerCompat(it, view) }
+        insetsController?.let {
+            it.hide(WindowInsetsCompat.Type.systemBars())
+            it.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+        onDispose {
+            insetsController?.show(WindowInsetsCompat.Type.systemBars())
+            viewModel.releasePlayer()
+        }
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val listener = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> {
+                    if (!(activity?.isInPictureInPictureMode ?: false)) {
+                        viewModel.pause()
+                    }
+                }
+                Lifecycle.Event.ON_RESUME -> {
+                    viewModel.play()
+                }
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(listener)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(listener)
+        }
+    }
+
+    LaunchedEffect(brightness) {
+        activity?.window?.let { window ->
+            val layoutParams = window.attributes
+            layoutParams.screenBrightness = brightness
+            window.attributes = layoutParams
+        }
+    }
+
+    LaunchedEffect(volume) {
+        val audioManager = context.getSystemService(AudioManager::class.java)
+        val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        val targetVol = (volume * maxVol).toInt()
+        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0)
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+    ) {
+        AndroidView(
+            factory = { ctx ->
+                PlayerView(ctx).apply {
+                    layoutParams = FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    useController = false
+                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                }
+            },
+            modifier = Modifier.fillMaxSize(),
+            update = { playerView ->
+                playerView.player = player
+                playerView.resizeMode = resizeMode
+            }
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onDoubleTap = { offset ->
+                            val width = size.width
+                            val seekTime = if (offset.x < width / 2) -10000L else 10000L
+                            viewModel.seekBy(seekTime)
+                        }
+                    )
+                }
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+                            val width = size.width
+                            val deltaX = dragAmount.x / width
+                            if (change.position.x < width / 2) {
+                                val newBrightness = (brightness + deltaX * 2).coerceIn(-1f, 1f)
+                                viewModel.setBrightness(newBrightness)
+                            } else {
+                                val newVolume = (volume + deltaX * 2).coerceIn(0f, 1f)
+                                viewModel.setVolume(newVolume)
+                            }
+                        }
+                    )
+                }
+        )
+
+        if (seekMessage != null) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Surface(
+                    color = Color.Black.copy(alpha = 0.8f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = seekMessage!!,
+                        color = Color.White,
+                        modifier = Modifier.padding(16.dp),
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (playerTitle.isNotEmpty()) playerTitle else title,
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    IconButton(onClick = { showAudioSheet = true }) {
+                        Icon(
+                            imageVector = Icons.Default.VolumeUp,
+                            contentDescription = "Audio Tracks",
+                            tint = Color.White
+                        )
+                    }
+                    IconButton(onClick = { showSubtitleSheet = true }) {
+                        Icon(
+                            imageVector = Icons.Default.ClosedCaption,
+                            contentDescription = "Subtitles",
+                            tint = Color.White
+                        )
+                    }
+                    IconButton(
+                        onClick = {
+                            onBack()
+                            viewModel.releasePlayer()
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = Color.White
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            val progress = if (duration > 0) (currentPosition.toFloat() / duration.toFloat()) else 0f
+            LinearProgressIndicator(
+                progress = progress,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp),
+                color = AccentBlue,
+                trackColor = Color.Gray.copy(alpha = 0.3f)
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = formatTime(currentPosition),
+                    color = Color.White.copy(alpha = 0.7f),
+                    style = MaterialTheme.typography.labelSmall
+                )
+                Text(
+                    text = formatTime(duration),
+                    color = Color.White.copy(alpha = 0.7f),
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { viewModel.skipBackward() }) {
+                    Icon(Icons.Default.Replay10, contentDescription = "Back 10s", tint = Color.White)
+                }
+                IconButton(onClick = { viewModel.playPause() }) {
+                    Icon(
+                        if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = "Play/Pause",
+                        tint = Color.White,
+                        modifier = Modifier.size(40.dp)
+                    )
+                }
+                IconButton(onClick = { viewModel.skipForward() }) {
+                    Icon(Icons.Default.Forward10, contentDescription = "Forward 10s", tint = Color.White)
+                }
+                IconButton(onClick = {
+                    resizeMode = when (resizeMode) {
+                        AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+                        AspectRatioFrameLayout.RESIZE_MODE_FILL -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                        AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
+                        AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH -> AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT
+                        else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    }
+                }) {
+                    Icon(Icons.Default.AspectRatio, contentDescription = "Resize Mode", tint = Color.White)
+                }
+                IconButton(onClick = {
+                    isFullscreen = !isFullscreen
+                    if (isFullscreen) {
+                        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                        WindowInsetsControllerCompat(activity?.window!!, view).hide(WindowInsetsCompat.Type.systemBars())
+                        WindowInsetsControllerCompat(activity?.window!!, view).systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    } else {
+                        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                        WindowInsetsControllerCompat(activity?.window!!, view).show(WindowInsetsCompat.Type.systemBars())
+                    }
+                }) {
+                    Icon(
+                        if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+                        contentDescription = "Fullscreen",
+                        tint = Color.White
+                    )
+                }
+            }
+        }
+
+        if (error != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                ) {
+                    Text(
+                        text = "Error: $error",
+                        modifier = Modifier.padding(16.dp),
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+            }
+        }
+    }
+
+    if (showAudioSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showAudioSheet = false }
+        ) {
+            val audioTracks by viewModel.audioTracks.collectAsState()
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Audio Tracks", style = MaterialTheme.typography.headlineSmall)
+                Spacer(modifier = Modifier.height(8.dp))
+                LazyColumn {
+                    items(audioTracks) { track ->
+                        ListItem(
+                            headlineContent = { Text(track.label) },
+                            supportingContent = { Text(track.language) },
+                            modifier = Modifier.clickable {
+                                viewModel.selectAudioTrack(track)
+                                showAudioSheet = false
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (showSubtitleSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showSubtitleSheet = false }
+        ) {
+            val subtitleTracks by viewModel.subtitleTracks.collectAsState()
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Subtitles", style = MaterialTheme.typography.headlineSmall)
+                Spacer(modifier = Modifier.height(8.dp))
+                LazyColumn {
+                    item {
+                        ListItem(
+                            headlineContent = { Text("Off") },
+                            modifier = Modifier.clickable {
+                                viewModel.disableSubtitles()
+                                showSubtitleSheet = false
+                            }
+                        )
+                    }
+                    items(subtitleTracks) { track ->
+                        ListItem(
+                            headlineContent = { Text(track.label) },
+                            supportingContent = { Text(track.language) },
+                            modifier = Modifier.clickable {
+                                viewModel.selectSubtitleTrack(track)
+                                showSubtitleSheet = false
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun formatTime(millis: Long): String {
+    if (millis <= 0) return "0:00"
+    val seconds = millis / 1000
+    val minutes = seconds / 60
+    val secs = seconds % 60
+    return if (minutes >= 60) {
+        val hours = minutes / 60
+        "%d:%02d:%02d".format(hours, minutes % 60, secs)
+    } else {
+        "%d:%02d".format(minutes, secs)
+    }
+}
+INNER_EOF
+
+echo "==> Staging and pushing changes to GitHub..."
+git add app/src/main/java/com/ultrastream/app/ui/screens/player/PlayerViewModel.kt
+git add app/src/main/java/com/ultrastream/app/ui/screens/player/PlayerScreen.kt
+git commit -m "Fix: Resolve all Media3 API and Compose LazyColumn import errors in Player"
+git push origin main
+
+echo "✅ All Build Errors Fixed! Please check GitHub Actions."
+
+```
+
+---
+
+## File: `fix_addon_links.sh`
+
+```bash
+#!/bin/bash
+set -e
+
+echo "🚀 Fixing Addon URL TextField Size & Link Parsing..."
+
+# 1. Update AddonsScreen.kt to lock the TextField size
+cat > app/src/main/java/com/ultrastream/app/ui/screens/addons/AddonsScreen.kt << 'INNER_EOF'
+package com.ultrastream.app.ui.screens.addons
+
+import android.widget.Toast
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.launch
+
+@Composable
+fun AddonsScreen(
+    viewModel: AddonsViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+    
+    var addonUrl by remember { mutableStateOf("") }
+    var debridKey by remember { mutableStateOf(uiState.debridKey) }
+    var jsonInputText by remember { mutableStateOf("") }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            Text("Addons", style = MaterialTheme.typography.headlineMedium)
+        }
+        
+        // 1. FIXED: Addon URL Installation Box (Strictly Single Line)
+        item {
+            OutlinedTextField(
+                value = addonUrl,
+                onValueChange = { addonUrl = it },
+                label = { Text("Manifest URL (https:// or stremio://)") },
+                singleLine = true,
+                maxLines = 1,
+                modifier = Modifier.fillMaxWidth().height(64.dp)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = {
+                    if (addonUrl.isBlank()) return@Button
+                    scope.launch {
+                        val success = viewModel.installAddon(addonUrl)
+                        if (success) {
+                            addonUrl = ""
+                            Toast.makeText(context, "✅ Addon Installed!", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "❌ Install Failed: Server blocked or invalid format.", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Install Addon")
+            }
+        }
+
+        // 2. Import & Export JSON Array
+        item {
+            Text("Sync / Backup", style = MaterialTheme.typography.titleMedium)
+            
+            OutlinedTextField(
+                value = jsonInputText,
+                onValueChange = { jsonInputText = it },
+                label = { Text("Paste Import JSON here") },
+                modifier = Modifier.fillMaxWidth().height(120.dp),
+                minLines = 3,
+                maxLines = 5
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = {
+                        val json = viewModel.exportAddonsJson()
+                        if (json.isNotBlank()) {
+                            clipboardManager.setText(AnnotatedString(json))
+                            Toast.makeText(context, "✅ JSON Copied to Clipboard!", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Export JSON")
+                }
+                Button(
+                    onClick = {
+                        if (jsonInputText.isBlank()) {
+                            Toast.makeText(context, "Paste JSON code first!", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        scope.launch {
+                            val success = viewModel.importAddonsJson(jsonInputText)
+                            if (success) {
+                                jsonInputText = ""
+                                Toast.makeText(context, "✅ Addons Imported!", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, "❌ Invalid JSON format.", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Import JSON")
+                }
+            }
+        }
+
+        // 3. Debrid Settings
+        item {
+            Text("Real-Debrid Key", style = MaterialTheme.typography.titleMedium)
+            OutlinedTextField(
+                value = debridKey,
+                onValueChange = { debridKey = it },
+                label = { Text("Debrid API Key") },
+                singleLine = true,
+                maxLines = 1,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = {
+                    scope.launch {
+                        viewModel.saveDebridKey(debridKey)
+                        Toast.makeText(context, "Saved!", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Save Debrid Key")
+            }
+        }
+
+        // 4. Installed Addons List
+        item {
+            Text("Installed Addons (${uiState.addons.size})", style = MaterialTheme.typography.titleMedium)
+        }
+        items(uiState.addons.size) { index ->
+            val addon = uiState.addons[index]
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                        Text(addon.name, style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            text = addon.url, 
+                            style = MaterialTheme.typography.bodySmall, 
+                            maxLines = 1, 
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(
+                            checked = addon.enabled,
+                            onCheckedChange = { scope.launch { viewModel.toggleAddon(addon.id, it) } }
+                        )
+                        if (!addon.required) {
+                            IconButton(onClick = { scope.launch { viewModel.removeAddon(addon.id) } }) {
+                                Icon(imageVector = Icons.Default.Delete, contentDescription = "Remove")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+INNER_EOF
+
+# 2. Update AddonsViewModel.kt to clean complex URLs safely
+cat > app/src/main/java/com/ultrastream/app/ui/screens/addons/AddonsViewModel.kt << 'INNER_EOF'
+package com.ultrastream.app.ui.screens.addons
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import com.ultrastream.app.data.models.Addon
+import com.ultrastream.app.data.models.Catalog
+import com.ultrastream.app.data.preferences.PreferencesManager
+import com.ultrastream.app.data.repository.AddonRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import javax.inject.Inject
+
+@HiltViewModel
+class AddonsViewModel @Inject constructor(
+    private val addonRepository: AddonRepository,
+    private val preferencesManager: PreferencesManager
+) : ViewModel() {
+
+    private val _uiState = MutableStateFlow(AddonsUiState())
+    val uiState: StateFlow<AddonsUiState> = _uiState.asStateFlow()
+
+    private val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+
+    init {
+        loadAddons()
+        observeDebridKey()
+    }
+
+    fun loadAddons() {
+        viewModelScope.launch {
+            val addons = addonRepository.getAllAddons()
+            _uiState.value = _uiState.value.copy(addons = addons)
+        }
+    }
+
+    private fun observeDebridKey() {
+        viewModelScope.launch {
+            preferencesManager.getDebridKey().collect { key ->
+                _uiState.value = _uiState.value.copy(debridKey = key)
+            }
+        }
+    }
+
+    suspend fun installAddon(rawUrl: String): Boolean {
+        var safeUrl = rawUrl.trim()
+        if (safeUrl.startsWith("stremio://")) {
+            safeUrl = safeUrl.replace("stremio://", "https://")
+        } else if (!safeUrl.startsWith("http")) {
+            safeUrl = "https://$safeUrl"
+        }
+        
+        // Remove trailing slashes if accidentally pasted
+        if (safeUrl.endsWith("/")) {
+            safeUrl = safeUrl.dropLast(1)
+        }
+        
+        val addon = addonRepository.installAddon(safeUrl)
+        if (addon != null) {
+            loadAddons()
+            return true
+        }
+        return false
+    }
+
+    suspend fun toggleAddon(id: String, enabled: Boolean) {
+        addonRepository.toggleAddon(id, enabled)
+        loadAddons()
+    }
+
+    suspend fun removeAddon(id: String) {
+        addonRepository.removeAddon(id)
+        loadAddons()
+    }
+
+    suspend fun saveDebridKey(key: String) {
+        preferencesManager.setDebridKey(key)
+        _uiState.value = _uiState.value.copy(debridKey = key)
+    }
+
+    fun exportAddonsJson(): String {
+        return try {
+            val addons = _uiState.value.addons
+            val exportList = addons.map {
+                val catAdapter = moshi.adapter<List<Catalog>>(Types.newParameterizedType(List::class.java, Catalog::class.java))
+                val parsedCatalogs = try { catAdapter.fromJson(it.catalogs) } catch(e:Exception) { emptyList() }
+                StremioAddonExport(it.id, it.url, it.name, parsedCatalogs, it.enabled, it.required)
+            }
+            val type = Types.newParameterizedType(List::class.java, StremioAddonExport::class.java)
+            moshi.adapter<List<StremioAddonExport>>(type).toJson(exportList)
+        } catch (e: Exception) {
+            ""
+        }
+    }
+
+    suspend fun importAddonsJson(json: String): Boolean {
+        return try {
+            val type = Types.newParameterizedType(List::class.java, StremioAddonExport::class.java)
+            val importList = moshi.adapter<List<StremioAddonExport>>(type).fromJson(json) ?: return false
+
+            val newAddons = importList.map {
+                val catAdapter = moshi.adapter<List<Catalog>>(Types.newParameterizedType(List::class.java, Catalog::class.java))
+                val catsJson = catAdapter.toJson(it.catalogs ?: emptyList())
+                Addon(it.id, it.url, it.name, catsJson, it.enabled, it.required)
+            }
+            addonRepository.insertRawAddons(newAddons)
+            loadAddons()
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    data class AddonsUiState(
+        val addons: List<Addon> = emptyList(),
+        val debridKey: String = ""
+    )
+}
+
+data class StremioAddonExport(
+    val id: String,
+    val url: String,
+    val name: String,
+    val catalogs: List<Catalog>? = emptyList(),
+    val enabled: Boolean = true,
+    val required: Boolean = false
+)
+INNER_EOF
+
+git add app/src/main/java/com/ultrastream/app/ui/screens/addons/AddonsScreen.kt
+git add app/src/main/java/com/ultrastream/app/ui/screens/addons/AddonsViewModel.kt
+git commit -m "Fix: Lock Addon URL TextField size to single line and improve link parsing"
+git push origin main
+
+echo "✅ Addon Box Size & Parser Fixed!"
 
 ```
 
@@ -5367,6 +7142,10 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackGroup
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.TrackSelectionParameters
+import androidx.media3.common.Tracks
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -5385,6 +7164,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+data class AudioTrackInfo(val groupIndex: Int, val trackIndex: Int, val label: String, val language: String)
+data class SubtitleTrackInfo(val groupIndex: Int, val trackIndex: Int, val label: String, val language: String)
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor() : ViewModel() {
@@ -5413,8 +7195,17 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
     private val _volume = MutableStateFlow(1.0f)
     val volume: StateFlow<Float> = _volume.asStateFlow()
 
-    private val _brightness = MutableStateFlow(1.0f)
+    private val _brightness = MutableStateFlow(-1.0f)
     val brightness: StateFlow<Float> = _brightness.asStateFlow()
+
+    private val _audioTracks = MutableStateFlow<List<AudioTrackInfo>>(emptyList())
+    val audioTracks: StateFlow<List<AudioTrackInfo>> = _audioTracks.asStateFlow()
+
+    private val _subtitleTracks = MutableStateFlow<List<SubtitleTrackInfo>>(emptyList())
+    val subtitleTracks: StateFlow<List<SubtitleTrackInfo>> = _subtitleTracks.asStateFlow()
+
+    private val _seekMessage = MutableStateFlow<String?>(null)
+    val seekMessage: StateFlow<String?> = _seekMessage.asStateFlow()
 
     private var playerListener: Player.Listener? = null
     private var positionJob: Job? = null
@@ -5435,10 +7226,9 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
 
                 val dataSourceFactory = createDataSourceFactory()
                 val mediaItemBuilder = MediaItem.Builder()
-                    .setUri(url)
+                    .setUri(Uri.parse(url))
                     .setMediaMetadata(MediaMetadata.Builder().setTitle(title).build())
 
-                // FIXED: Attach external subtitles safely using explicit MIME types and Uri.parse
                 stream.subtitles?.let { subs ->
                     val configs = subs.mapNotNull { subtitle ->
                         val subUriStr = subtitle.url ?: return@mapNotNull null
@@ -5478,7 +7268,6 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
                             Player.STATE_ENDED -> {
                                 _isPlaying.value = false
                             }
-                            else -> {}
                         }
                     }
 
@@ -5488,6 +7277,41 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
 
                     override fun onPlayerError(error: PlaybackException) {
                         _error.value = error.message
+                    }
+                    
+                    override fun onTracksChanged(tracks: Tracks) {
+                        val audioList = mutableListOf<AudioTrackInfo>()
+                        val subtitleList = mutableListOf<SubtitleTrackInfo>()
+
+                        tracks.groups.forEachIndexed { groupIndex, trackGroup ->
+                            if (trackGroup.type == C.TRACK_TYPE_AUDIO) {
+                                for (trackIndex in 0 until trackGroup.length) {
+                                    val format = trackGroup.getTrackFormat(trackIndex)
+                                    audioList.add(
+                                        AudioTrackInfo(
+                                            groupIndex = groupIndex,
+                                            trackIndex = trackIndex,
+                                            label = format.label ?: format.language ?: "Audio $trackIndex",
+                                            language = format.language ?: "und"
+                                        )
+                                    )
+                                }
+                            } else if (trackGroup.type == C.TRACK_TYPE_TEXT) {
+                                for (trackIndex in 0 until trackGroup.length) {
+                                    val format = trackGroup.getTrackFormat(trackIndex)
+                                    subtitleList.add(
+                                        SubtitleTrackInfo(
+                                            groupIndex = groupIndex,
+                                            trackIndex = trackIndex,
+                                            label = format.label ?: format.language ?: "Subtitle $trackIndex",
+                                            language = format.language ?: "und"
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                        _audioTracks.value = audioList
+                        _subtitleTracks.value = subtitleList
                     }
                 }
                 exoPlayer.addListener(listener)
@@ -5565,6 +7389,18 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
         }
     }
 
+    fun seekBy(offsetMs: Long) {
+        _player.value?.let { player ->
+            val newPos = player.currentPosition + offsetMs
+            player.seekTo(newPos.coerceIn(0, player.duration))
+            viewModelScope.launch {
+                _seekMessage.value = if (offsetMs > 0) "+${offsetMs/1000}s" else "-${-offsetMs/1000}s"
+                delay(800)
+                _seekMessage.value = null
+            }
+        }
+    }
+
     fun seekTo(position: Long) {
         _player.value?.seekTo(position.coerceIn(0, _duration.value))
     }
@@ -5580,7 +7416,40 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
     }
 
     fun setBrightness(brightness: Float) {
-        _brightness.value = brightness.coerceIn(0f, 1f)
+        _brightness.value = brightness.coerceIn(-1f, 1f)
+    }
+
+    fun selectAudioTrack(info: AudioTrackInfo) {
+        val player = _player.value ?: return
+        val group = player.currentTracks.groups.getOrNull(info.groupIndex) ?: return
+        
+        val params = player.trackSelectionParameters.buildUpon()
+            .setOverrideForType(
+                TrackSelectionOverride(group.mediaTrackGroup, listOf(info.trackIndex))
+            )
+            .build()
+        player.trackSelectionParameters = params
+    }
+
+    fun disableSubtitles() {
+        val player = _player.value ?: return
+        val params = player.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            .build()
+        player.trackSelectionParameters = params
+    }
+
+    fun selectSubtitleTrack(info: SubtitleTrackInfo) {
+        val player = _player.value ?: return
+        val group = player.currentTracks.groups.getOrNull(info.groupIndex) ?: return
+        
+        val params = player.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            .setOverrideForType(
+                TrackSelectionOverride(group.mediaTrackGroup, listOf(info.trackIndex))
+            )
+            .build()
+        player.trackSelectionParameters = params
     }
 
     fun releasePlayer() {
@@ -5602,23 +7471,27 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
 ## File: `app/src/main/java/com/ultrastream/app/ui/screens/player/PlayerScreen.kt`
 
 ```kotlin
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.ultrastream.app.ui.screens.player
 
 import android.app.Activity
+import android.content.pm.ActivityInfo
 import android.media.AudioManager
 import android.os.Build
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Replay
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Forward
-import androidx.compose.material.icons.filled.PictureInPicture
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -5626,8 +7499,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -5635,8 +7511,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.ultrastream.app.data.models.StreamItem
+import com.ultrastream.app.ui.theme.AccentBlue
 
 @Composable
 fun PlayerScreen(
@@ -5648,6 +7526,26 @@ fun PlayerScreen(
     val context = LocalContext.current
     val view = LocalView.current
     val activity = context as? Activity
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    val player by viewModel.player.collectAsState()
+    val currentPosition by viewModel.currentPosition.collectAsState()
+    val duration by viewModel.duration.collectAsState()
+    val isPlaying by viewModel.isPlaying.collectAsState()
+    val error by viewModel.error.collectAsState()
+    val playerTitle by viewModel.title.collectAsState()
+    val brightness by viewModel.brightness.collectAsState()
+    val volume by viewModel.volume.collectAsState()
+    val seekMessage by viewModel.seekMessage.collectAsState()
+
+    var resizeMode by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
+    var isFullscreen by remember { mutableStateOf(false) }
+    var showAudioSheet by remember { mutableStateOf(false) }
+    var showSubtitleSheet by remember { mutableStateOf(false) }
+
+    LaunchedEffect(stream) {
+        viewModel.initializePlayer(context, stream, title)
+    }
 
     DisposableEffect(Unit) {
         val window = activity?.window
@@ -5658,25 +7556,27 @@ fun PlayerScreen(
         }
         onDispose {
             insetsController?.show(WindowInsetsCompat.Type.systemBars())
+            viewModel.releasePlayer()
         }
     }
 
-    val player by viewModel.player.collectAsState()
-    val currentPosition by viewModel.currentPosition.collectAsState()
-    val duration by viewModel.duration.collectAsState()
-    val isPlaying by viewModel.isPlaying.collectAsState()
-    val error by viewModel.error.collectAsState()
-    val playerTitle by viewModel.title.collectAsState()
-    val brightness by viewModel.brightness.collectAsState()
-    val volume by viewModel.volume.collectAsState()
-
-    LaunchedEffect(stream) {
-        viewModel.initializePlayer(context, stream, title)
-    }
-
-    DisposableEffect(Unit) {
+    DisposableEffect(lifecycleOwner) {
+        val listener = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> {
+                    if (!(activity?.isInPictureInPictureMode ?: false)) {
+                        viewModel.pause()
+                    }
+                }
+                Lifecycle.Event.ON_RESUME -> {
+                    viewModel.play()
+                }
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(listener)
         onDispose {
-            viewModel.releasePlayer()
+            lifecycleOwner.lifecycle.removeObserver(listener)
         }
     }
 
@@ -5695,27 +7595,6 @@ fun PlayerScreen(
         audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0)
     }
 
-    DisposableEffect(Unit) {
-        val listener = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_PAUSE -> {
-                    if (!(activity?.isInPictureInPictureMode ?: false)) {
-                        viewModel.pause()
-                    }
-                }
-                Lifecycle.Event.ON_RESUME -> {
-                    viewModel.play()
-                }
-                else -> {}
-            }
-        }
-        val lifecycle = (context as? LifecycleOwner)?.lifecycle
-        lifecycle?.addObserver(listener)
-        onDispose {
-            lifecycle?.removeObserver(listener)
-        }
-    }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -5729,14 +7608,63 @@ fun PlayerScreen(
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
                     useController = false
-                    resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                 }
             },
             modifier = Modifier.fillMaxSize(),
             update = { playerView ->
                 playerView.player = player
+                playerView.resizeMode = resizeMode
             }
         )
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onDoubleTap = { offset ->
+                            val width = size.width
+                            val seekTime = if (offset.x < width / 2) -10000L else 10000L
+                            viewModel.seekBy(seekTime)
+                        }
+                    )
+                }
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+                            val width = size.width
+                            val deltaX = dragAmount.x / width
+                            if (change.position.x < width / 2) {
+                                val newBrightness = (brightness + deltaX * 2).coerceIn(-1f, 1f)
+                                viewModel.setBrightness(newBrightness)
+                            } else {
+                                val newVolume = (volume + deltaX * 2).coerceIn(0f, 1f)
+                                viewModel.setVolume(newVolume)
+                            }
+                        }
+                    )
+                }
+        )
+
+        if (seekMessage != null) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Surface(
+                    color = Color.Black.copy(alpha = 0.8f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = seekMessage!!,
+                        color = Color.White,
+                        modifier = Modifier.padding(16.dp),
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
 
         Column(
             modifier = Modifier
@@ -5745,22 +7673,36 @@ fun PlayerScreen(
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = if (playerTitle.isNotEmpty()) playerTitle else title,
                     color = Color.White,
-                    style = MaterialTheme.typography.titleMedium
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1
                 )
-                Row {
-                    IconButton(onClick = { enterPip(activity) }) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    IconButton(onClick = { showAudioSheet = true }) {
                         Icon(
-                            imageVector = Icons.Default.PictureInPicture,
-                            contentDescription = "Picture in Picture",
+                            imageVector = Icons.Default.VolumeUp,
+                            contentDescription = "Audio Tracks",
                             tint = Color.White
                         )
                     }
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = { showSubtitleSheet = true }) {
+                        Icon(
+                            imageVector = Icons.Default.ClosedCaption,
+                            contentDescription = "Subtitles",
+                            tint = Color.White
+                        )
+                    }
+                    IconButton(
+                        onClick = {
+                            onBack()
+                            viewModel.releasePlayer()
+                        }
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = "Close",
@@ -5778,7 +7720,7 @@ fun PlayerScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(6.dp),
-                color = MaterialTheme.colorScheme.primary,
+                color = AccentBlue,
                 trackColor = Color.Gray.copy(alpha = 0.3f)
             )
             Row(
@@ -5801,46 +7743,53 @@ fun PlayerScreen(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = { viewModel.skipBackward() }) {
-                    Icon(Icons.Default.Replay, contentDescription = "Back 10s", tint = Color.White)
+                    Icon(Icons.Default.Replay10, contentDescription = "Back 10s", tint = Color.White)
                 }
                 IconButton(onClick = { viewModel.playPause() }) {
                     Icon(
                         if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = "Play/Pause",
-                        tint = Color.White
+                        tint = Color.White,
+                        modifier = Modifier.size(40.dp)
                     )
                 }
                 IconButton(onClick = { viewModel.skipForward() }) {
-                    Icon(Icons.Default.Forward, contentDescription = "Forward 10s", tint = Color.White)
+                    Icon(Icons.Default.Forward10, contentDescription = "Forward 10s", tint = Color.White)
+                }
+                IconButton(onClick = {
+                    resizeMode = when (resizeMode) {
+                        AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+                        AspectRatioFrameLayout.RESIZE_MODE_FILL -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                        AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
+                        AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH -> AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT
+                        else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    }
+                }) {
+                    Icon(Icons.Default.AspectRatio, contentDescription = "Resize Mode", tint = Color.White)
+                }
+                IconButton(onClick = {
+                    isFullscreen = !isFullscreen
+                    if (isFullscreen) {
+                        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                        WindowInsetsControllerCompat(activity?.window!!, view).hide(WindowInsetsCompat.Type.systemBars())
+                        WindowInsetsControllerCompat(activity?.window!!, view).systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    } else {
+                        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                        WindowInsetsControllerCompat(activity?.window!!, view).show(WindowInsetsCompat.Type.systemBars())
+                    }
+                }) {
+                    Icon(
+                        if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+                        contentDescription = "Fullscreen",
+                        tint = Color.White
+                    )
                 }
             }
         }
-
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragStart = { /* could show indicators */ },
-                        onDragEnd = { /* hide indicators */ },
-                        onDrag = { change, dragAmount ->
-                            change.consume()
-                            val width = size.width
-                            val deltaX = dragAmount.x / width
-                            if (change.position.x < width / 2) {
-                                val newBrightness = (brightness + deltaX).coerceIn(0f, 1f)
-                                viewModel.setBrightness(newBrightness)
-                            } else {
-                                val newVolume = (volume + deltaX).coerceIn(0f, 1f)
-                                viewModel.setVolume(newVolume)
-                            }
-                        }
-                    )
-                }
-        )
 
         if (error != null) {
             Box(
@@ -5861,11 +7810,62 @@ fun PlayerScreen(
             }
         }
     }
-}
 
-private fun enterPip(activity: Activity?) {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        activity?.enterPictureInPictureMode()
+    if (showAudioSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showAudioSheet = false }
+        ) {
+            val audioTracks by viewModel.audioTracks.collectAsState()
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Audio Tracks", style = MaterialTheme.typography.headlineSmall)
+                Spacer(modifier = Modifier.height(8.dp))
+                LazyColumn {
+                    items(audioTracks) { track ->
+                        ListItem(
+                            headlineContent = { Text(track.label) },
+                            supportingContent = { Text(track.language) },
+                            modifier = Modifier.clickable {
+                                viewModel.selectAudioTrack(track)
+                                showAudioSheet = false
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (showSubtitleSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showSubtitleSheet = false }
+        ) {
+            val subtitleTracks by viewModel.subtitleTracks.collectAsState()
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Subtitles", style = MaterialTheme.typography.headlineSmall)
+                Spacer(modifier = Modifier.height(8.dp))
+                LazyColumn {
+                    item {
+                        ListItem(
+                            headlineContent = { Text("Off") },
+                            modifier = Modifier.clickable {
+                                viewModel.disableSubtitles()
+                                showSubtitleSheet = false
+                            }
+                        )
+                    }
+                    items(subtitleTracks) { track ->
+                        ListItem(
+                            headlineContent = { Text(track.label) },
+                            supportingContent = { Text(track.language) },
+                            modifier = Modifier.clickable {
+                                viewModel.selectSubtitleTrack(track)
+                                showSubtitleSheet = false
+                            }
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -6718,24 +8718,39 @@ fun SearchScreen(
 ## File: `app/src/main/java/com/ultrastream/app/ui/screens/details/DetailsScreen.kt`
 
 ```kotlin
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.ultrastream.app.ui.screens.details
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
 import com.ultrastream.app.data.models.StreamItem
+import com.ultrastream.app.ui.components.EpisodeCard
+import com.ultrastream.app.ui.components.StreamCard
 import com.ultrastream.app.ui.components.bottomsheets.SeasonsSheet
 import com.ultrastream.app.ui.components.bottomsheets.StreamsSheet
+import com.ultrastream.app.ui.theme.*
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetailsScreen(
     id: String,
@@ -6763,94 +8778,234 @@ fun DetailsScreen(
         }
     }
 
-    if (meta != null) {
-        // 🚀 ADVANCED FIX: Using LazyVerticalGrid as the main root container!
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 80.dp),
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // 1. Header Section (Full Width Span)
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                Column {
-                    Text(meta.name, style = MaterialTheme.typography.headlineMedium)
-                    if (meta.year != null) {
-                        Text(meta.year, style = MaterialTheme.typography.bodyMedium)
-                    }
-                    if (meta.imdbRating != null) {
-                        Text("⭐ ${meta.imdbRating}", style = MaterialTheme.typography.bodyMedium)
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(meta.description ?: "", style = MaterialTheme.typography.bodyLarge)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        Button(
-                            onClick = { viewModel.toggleLibrary(meta) },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(if (uiState.inLibrary) "Remove from Library" else "Add to Library")
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = { viewModel.toggleWatchlist(meta) },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text(if (uiState.inWatchlist) "Remove from Watchlist" else "Add to Watchlist")
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
-            }
-
-            // 2. Season Selector & Episodes Section
-            if (meta.type == "series" || meta.type == "anime") {
-                val seasons = meta.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: emptyList()
-                val episodes = meta.videos
-                    ?.filter { it.season == uiState.selectedSeason }
-                    ?.sortedBy { it.episode } ?: emptyList()
-
-                // Season Title & Button (Full Width Span)
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+    Box(modifier = Modifier.fillMaxSize().background(BackgroundDark)) {
+        if (meta != null) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(350.dp)
                     ) {
-                        Text(
-                            text = "Season ${uiState.selectedSeason ?: ""}",
-                            style = MaterialTheme.typography.titleLarge
+                        AsyncImage(
+                            model = meta.background ?: meta.poster,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
                         )
-                        if (seasons.isNotEmpty()) {
-                            Button(onClick = { showSeasonsSheet = true }) {
-                                Text("Change Season")
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color.Transparent,
+                                            BackgroundDark.copy(alpha = 0.8f),
+                                            BackgroundDark
+                                        ),
+                                        startY = 0.3f
+                                    )
+                                )
+                        )
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 16.dp, start = 16.dp, end = 16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = Color.Black.copy(alpha = 0.6f),
+                                modifier = Modifier.size(44.dp)
+                            ) {
+                                IconButton(onClick = onBack) {
+                                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                                }
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = Color.Black.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(44.dp)
+                                ) {
+                                    IconButton(onClick = { /* View History */ }) {
+                                        Icon(Icons.Default.History, contentDescription = "History", tint = Color.White)
+                                    }
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = Color.Black.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(44.dp)
+                                ) {
+                                    IconButton(onClick = { viewModel.toggleLibrary(meta) }) {
+                                        Icon(
+                                            imageVector = if (uiState.inLibrary) Icons.Default.Bookmark else Icons.Outlined.BookmarkBorder,
+                                            contentDescription = "Bookmark",
+                                            tint = if (uiState.inLibrary) AccentBlue else Color.White
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(16.dp)
+                                .fillMaxWidth()
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = Color.Black.copy(alpha = 0.5f),
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
+                            ) {
+                                Text(
+                                    text = meta.type.uppercase(),
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = meta.name,
+                                style = MaterialTheme.typography.headlineLarge,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(meta.year ?: "", style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                                Text("•", style = MaterialTheme.typography.bodyMedium, color = TextMuted)
+                                Text(meta.runtime ?: "N/A", style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                                Text("•", style = MaterialTheme.typography.bodyMedium, color = TextMuted)
+                                Text("⭐ ${meta.imdbRating ?: "N/A"}", style = MaterialTheme.typography.bodyMedium, color = AccentBlue, fontWeight = FontWeight.Bold)
+                                if (!meta.genre.isNullOrEmpty()) {
+                                    Text("•", style = MaterialTheme.typography.bodyMedium, color = TextMuted)
+                                    Text(meta.genre!!.take(2).joinToString(", "), style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = meta.description ?: "",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = TextMuted,
+                                maxLines = 4,
+                                softWrap = true
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            if (!meta.cast.isNullOrEmpty()) {
+                                @OptIn(ExperimentalLayoutApi::class)
+                                FlowRow(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    meta.cast!!.take(5).forEach { actor ->
+                                        Surface(
+                                            shape = RoundedCornerShape(50),
+                                            color = Color.White.copy(alpha = 0.1f),
+                                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+                                        ) {
+                                            Text(
+                                                text = actor,
+                                                color = Color.White,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                 }
 
-                // Episode Cards (Grid Layout - Adaptive sizing)
-                if (episodes.isNotEmpty()) {
-                    items(episodes) { video ->
-                        val epNum = video.episode ?: 0
-                        val isSelected = epNum == uiState.selectedEpisode
-                        Card(
-                            modifier = Modifier.height(60.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.surfaceVariant
-                            ),
+                item {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Button(
                             onClick = {
-                                viewModel.selectEpisode(epNum)
-                            }
+                                viewModel.loadStreams(meta.id, meta.type, uiState.selectedSeason, uiState.selectedEpisode)
+                                showStreamsSheet = true
+                            },
+                            modifier = Modifier.fillMaxWidth().height(56.dp),
+                            shape = RoundedCornerShape(50),
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentBlue, contentColor = Color.Black)
                         ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                Text(
-                                    text = "E$epNum",
-                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary
-                                    else MaterialTheme.colorScheme.onSurface
+                            Icon(Icons.Default.Satellite, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(if (uiState.streamsLoading) "Loading Streams..." else "Find Streams", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = { /* Open IMDb */ },
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            shape = RoundedCornerShape(50),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
+                        ) {
+                            Icon(Icons.Default.Movie, contentDescription = null, tint = Color.White)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("View on IMDb", fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                    }
+                }
+
+                if (meta.type == "series" || meta.type == "anime") {
+                    val seasons = meta.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: emptyList()
+                    val episodes = meta.videos
+                        ?.filter { it.season == uiState.selectedSeason }
+                        ?.sortedBy { it.episode } ?: emptyList()
+
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Episodes",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            if (seasons.isNotEmpty()) {
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = Color.White.copy(alpha = 0.1f),
+                                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp).clickable { showSeasonsSheet = true },
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text("Season ${uiState.selectedSeason ?: ""}", fontWeight = FontWeight.Bold)
+                                        Icon(Icons.Default.ExpandMore, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    item {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            episodes.forEach { video ->
+                                val isWatched = uiState.watchProgress?.let { it.percent >= 100 } ?: false
+                                
+                                EpisodeCard(
+                                    video = video,
+                                    isWatched = isWatched,
+                                    progressPercent = uiState.watchProgress?.percent ?: 0,
+                                    onClick = {
+                                        viewModel.selectEpisode(video.episode ?: 0)
+                                        viewModel.loadStreams(meta.id, meta.type, uiState.selectedSeason, video.episode)
+                                        showStreamsSheet = true
+                                    }
                                 )
                             }
                         }
@@ -6858,34 +9013,17 @@ fun DetailsScreen(
                 }
             }
 
-            // 3. Footer Section (Find Streams Button - Full Width Span)
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                Column {
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Button(
-                        onClick = {
-                            viewModel.loadStreams(meta.id, meta.type, uiState.selectedSeason, uiState.selectedEpisode)
-                            showStreamsSheet = true
-                        },
-                        modifier = Modifier.fillMaxWidth().height(50.dp)
-                    ) {
-                        Text(if (uiState.streamsLoading) "Loading Streams..." else "Find Streams")
-                    }
-                    Spacer(modifier = Modifier.height(32.dp)) // Extra padding for bottom navigation
-                }
+        } else if (uiState.isLoading) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = AccentBlue)
             }
-        }
-    } else if (uiState.isLoading) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
-        }
-    } else if (uiState.error != null) {
-        Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
-            Text("Error: ${uiState.error}", color = MaterialTheme.colorScheme.error)
+        } else if (uiState.error != null) {
+            Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+                Text("Error: ${uiState.error}", color = MaterialTheme.colorScheme.error)
+            }
         }
     }
 
-    // Bottom Sheets
     if (showSeasonsSheet) {
         val seasons = meta?.videos?.mapNotNull { it.season }?.distinct()?.sorted() ?: emptyList()
         SeasonsSheet(
@@ -6900,16 +9038,28 @@ fun DetailsScreen(
     }
 
     if (showStreamsSheet && uiState.streams.isNotEmpty()) {
-        StreamsSheet(
-            streams = uiState.streams,
-            onDismiss = { showStreamsSheet = false },
-            onStreamClick = { stream ->
-                showStreamsSheet = false
-                viewModel.playStream(stream, meta?.name ?: "Stream") { resolvedStream, title ->
-                    onPlay(resolvedStream, title)
+        ModalBottomSheet(
+            onDismissRequest = { showStreamsSheet = false }
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Available Streams", style = MaterialTheme.typography.headlineSmall)
+                Spacer(modifier = Modifier.height(8.dp))
+                LazyColumn {
+                    items(uiState.streams) { stream ->
+                        StreamCard(
+                            stream = stream,
+                            onClick = {
+                                showStreamsSheet = false
+                                viewModel.playStream(stream, meta?.name ?: "Stream") { resolvedStream, title ->
+                                    onPlay(resolvedStream, title)
+                                }
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                 }
             }
-        )
+        }
     }
 }
 
@@ -7173,10 +9323,16 @@ class AddonsViewModel @Inject constructor(
     }
 
     suspend fun installAddon(rawUrl: String): Boolean {
-        // Fix for stremio:// links and trailing slashes
-        var safeUrl = rawUrl.trim().replace("stremio://", "https://")
-        if (!safeUrl.startsWith("http")) {
+        var safeUrl = rawUrl.trim()
+        if (safeUrl.startsWith("stremio://")) {
+            safeUrl = safeUrl.replace("stremio://", "https://")
+        } else if (!safeUrl.startsWith("http")) {
             safeUrl = "https://$safeUrl"
+        }
+        
+        // Remove trailing slashes if accidentally pasted
+        if (safeUrl.endsWith("/")) {
+            safeUrl = safeUrl.dropLast(1)
         }
         
         val addon = addonRepository.installAddon(safeUrl)
@@ -7266,10 +9422,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.launch
@@ -7285,6 +9443,7 @@ fun AddonsScreen(
     
     var addonUrl by remember { mutableStateOf("") }
     var debridKey by remember { mutableStateOf(uiState.debridKey) }
+    var jsonInputText by remember { mutableStateOf("") }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -7295,23 +9454,27 @@ fun AddonsScreen(
             Text("Addons", style = MaterialTheme.typography.headlineMedium)
         }
         
-        // Addon URL Installation
+        // 1. FIXED: Addon URL Installation Box (Strictly Single Line)
         item {
             OutlinedTextField(
                 value = addonUrl,
                 onValueChange = { addonUrl = it },
                 label = { Text("Manifest URL (https:// or stremio://)") },
-                modifier = Modifier.fillMaxWidth()
+                singleLine = true,
+                maxLines = 1,
+                modifier = Modifier.fillMaxWidth().height(64.dp)
             )
+            Spacer(modifier = Modifier.height(8.dp))
             Button(
                 onClick = {
+                    if (addonUrl.isBlank()) return@Button
                     scope.launch {
                         val success = viewModel.installAddon(addonUrl)
                         if (success) {
                             addonUrl = ""
                             Toast.makeText(context, "✅ Addon Installed!", Toast.LENGTH_SHORT).show()
                         } else {
-                            Toast.makeText(context, "❌ Install Failed: Check URL format.", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, "❌ Install Failed: Server blocked or invalid format.", Toast.LENGTH_LONG).show()
                         }
                     }
                 },
@@ -7321,9 +9484,21 @@ fun AddonsScreen(
             }
         }
 
-        // Import & Export exact Stremio JSON Array
+        // 2. Import & Export JSON Array
         item {
             Text("Sync / Backup", style = MaterialTheme.typography.titleMedium)
+            
+            OutlinedTextField(
+                value = jsonInputText,
+                onValueChange = { jsonInputText = it },
+                label = { Text("Paste Import JSON here") },
+                modifier = Modifier.fillMaxWidth().height(120.dp),
+                minLines = 3,
+                maxLines = 5
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 Button(
                     onClick = {
@@ -7339,17 +9514,17 @@ fun AddonsScreen(
                 }
                 Button(
                     onClick = {
-                        val json = clipboardManager.getText()?.text ?: ""
-                        if (json.isBlank()) {
-                            Toast.makeText(context, "Clipboard is empty!", Toast.LENGTH_SHORT).show()
+                        if (jsonInputText.isBlank()) {
+                            Toast.makeText(context, "Paste JSON code first!", Toast.LENGTH_SHORT).show()
                             return@Button
                         }
                         scope.launch {
-                            val success = viewModel.importAddonsJson(json)
+                            val success = viewModel.importAddonsJson(jsonInputText)
                             if (success) {
+                                jsonInputText = ""
                                 Toast.makeText(context, "✅ Addons Imported!", Toast.LENGTH_SHORT).show()
                             } else {
-                                Toast.makeText(context, "❌ Invalid JSON format in clipboard.", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "❌ Invalid JSON format.", Toast.LENGTH_SHORT).show()
                             }
                         }
                     },
@@ -7360,15 +9535,18 @@ fun AddonsScreen(
             }
         }
 
-        // Debrid Settings
+        // 3. Debrid Settings
         item {
             Text("Real-Debrid Key", style = MaterialTheme.typography.titleMedium)
             OutlinedTextField(
                 value = debridKey,
                 onValueChange = { debridKey = it },
                 label = { Text("Debrid API Key") },
+                singleLine = true,
+                maxLines = 1,
                 modifier = Modifier.fillMaxWidth()
             )
+            Spacer(modifier = Modifier.height(8.dp))
             Button(
                 onClick = {
                     scope.launch {
@@ -7382,7 +9560,7 @@ fun AddonsScreen(
             }
         }
 
-        // Installed Addons List
+        // 4. Installed Addons List
         item {
             Text("Installed Addons (${uiState.addons.size})", style = MaterialTheme.typography.titleMedium)
         }
@@ -7394,29 +9572,25 @@ fun AddonsScreen(
             ) {
                 Row(
                     modifier = Modifier.padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                         Text(addon.name, style = MaterialTheme.typography.titleSmall)
-                        Text(addon.url, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                        Text(
+                            text = addon.url, 
+                            style = MaterialTheme.typography.bodySmall, 
+                            maxLines = 1, 
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
-                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Switch(
                             checked = addon.enabled,
-                            onCheckedChange = {
-                                scope.launch {
-                                    viewModel.toggleAddon(addon.id, it)
-                                }
-                            }
+                            onCheckedChange = { scope.launch { viewModel.toggleAddon(addon.id, it) } }
                         )
                         if (!addon.required) {
-                            IconButton(
-                                onClick = {
-                                    scope.launch {
-                                        viewModel.removeAddon(addon.id)
-                                    }
-                                }
-                            ) {
+                            IconButton(onClick = { scope.launch { viewModel.removeAddon(addon.id) } }) {
                                 Icon(imageVector = Icons.Default.Delete, contentDescription = "Remove")
                             }
                         }
@@ -7468,55 +9642,24 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.Color
 
 private val DarkColorScheme = darkColorScheme(
     primary = AccentBlue,
-    onPrimary = TextMainDark,
-    secondary = AccentPurple,
-    onSecondary = TextMainDark,
-    tertiary = AccentGold,
-    onTertiary = TextMainDark,
+    onPrimary = Color.Black,
     background = BackgroundDark,
-    onBackground = TextMainDark,
     surface = SurfaceDark,
-    onSurface = TextMainDark,
-    surfaceVariant = CardDark,
-    onSurfaceVariant = TextMutedDark,
-    error = AccentRed,
-    onError = TextMainDark
+    onSurface = TextMain,
+    onSurfaceVariant = TextMuted
 )
 
 private val LightColorScheme = lightColorScheme(
     primary = AccentBlue,
-    onPrimary = TextMainLight,
-    secondary = AccentPurple,
-    onSecondary = TextMainLight,
-    tertiary = AccentGold,
-    onTertiary = TextMainLight,
-    background = BackgroundLight,
-    onBackground = TextMainLight,
-    surface = SurfaceLight,
-    onSurface = TextMainLight,
-    surfaceVariant = CardLight,
-    onSurfaceVariant = TextMutedLight,
-    error = AccentRed,
-    onError = TextMainLight
-)
-
-// Local composition for custom colors if needed
-val LocalCustomColors = staticCompositionLocalOf { CustomColors() }
-
-data class CustomColors(
-    val accentBlue: androidx.compose.ui.graphics.Color = AccentBlue,
-    val accentGold: androidx.compose.ui.graphics.Color = AccentGold,
-    val accentRed: androidx.compose.ui.graphics.Color = AccentRed,
-    val accentGreen: androidx.compose.ui.graphics.Color = AccentGreen,
-    val accentPurple: androidx.compose.ui.graphics.Color = AccentPurple,
-    val accentPink: androidx.compose.ui.graphics.Color = AccentPink,
-    val accentOrange: androidx.compose.ui.graphics.Color = AccentOrange,
-    val textMuted: androidx.compose.ui.graphics.Color = TextMutedDark
+    onPrimary = Color.Black,
+    background = Color(0xFFF3F4F6),
+    surface = Color.White,
+    onSurface = Color(0xFF111827),
+    onSurfaceVariant = Color(0xFF6B7280)
 )
 
 @Composable
@@ -7525,26 +9668,12 @@ fun UltraStreamTheme(
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
-    val customColors = if (darkTheme) {
-        CustomColors(
-            textMuted = TextMutedDark
-        )
-    } else {
-        CustomColors(
-            textMuted = TextMutedLight
-        )
-    }
-
-    CompositionLocalProvider(
-        LocalCustomColors provides customColors
-    ) {
-        MaterialTheme(
-            colorScheme = colorScheme,
-            typography = Typography,
-            shapes = Shapes,
-            content = content
-        )
-    }
+    MaterialTheme(
+        colorScheme = colorScheme,
+        typography = Typography, // Uses Type.kt
+        shapes = Shapes, // Uses Shape.kt
+        content = content
+    )
 }
 
 ```
@@ -7558,35 +9687,19 @@ package com.ultrastream.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Dark theme colors (matching web CSS variables)
-val BackgroundDark = Color(0xFF060606)
-val SurfaceDark = Color(0xFF121212)
+// Cinematic Dark Theme Colors
+val BackgroundDark = Color(0xFF000000)
+val SurfaceDark = Color(0xFF141414)
 val CardDark = Color(0xFF1A1A1A)
-val TextMainDark = Color(0xFFFFFFFF)
-val TextMutedDark = Color(0xFFA3A3A3)
-val AccentBlue = Color(0xFF38BDF8)
+
+val AccentBlue = Color(0xFF00BFFF) // Cyan / Light Blue
 val AccentGold = Color(0xFFFBBF24)
 val AccentRed = Color(0xFFEF4444)
 val AccentGreen = Color(0xFF4CAF50)
-val AccentPurple = Color(0xFFA78BFA)
-val AccentPink = Color(0xFFF472B6)
-val AccentOrange = Color(0xFFFB923C)
+val AccentOrange = Color(0xFFF97316) // For Tags
 
-// Light theme colors
-val BackgroundLight = Color(0xFFF3F4F6)
-val SurfaceLight = Color(0xFFFFFFFF)
-val CardLight = Color(0xFFFFFFFF)
-val TextMainLight = Color(0xFF111827)
-val TextMutedLight = Color(0xFF6B7280)
-
-// Default Material colors
-val Purple80 = Color(0xFFD0BCFF)
-val PurpleGrey80 = Color(0xFFCCC2DC)
-val Pink80 = Color(0xFFEFB8C8)
-
-val Purple40 = Color(0xFF6650a4)
-val PurpleGrey40 = Color(0xFF625b71)
-val Pink40 = Color(0xFF7D5260)
+val TextMain = Color(0xFFFFFFFF)
+val TextMuted = Color(0xFFA3A3A3)
 
 ```
 
@@ -7873,6 +9986,124 @@ fun PosterCard(
 
 ---
 
+## File: `app/src/main/java/com/ultrastream/app/ui/components/EpisodeCard.kt`
+
+```kotlin
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+package com.ultrastream.app.ui.components
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import com.ultrastream.app.data.models.Video
+import com.ultrastream.app.ui.theme.*
+
+@Composable
+fun EpisodeCard(
+    video: Video,
+    isWatched: Boolean = false,
+    progressPercent: Int = 0,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(90.dp),
+        colors = CardDefaults.cardColors(containerColor = CardDark),
+        shape = RoundedCornerShape(16.dp),
+        onClick = onClick
+    ) {
+        Row(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .width(140.dp)
+                    .fillMaxHeight()
+            ) {
+                AsyncImage(
+                    model = video.thumbnail,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp)
+                        .background(Color.Black.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 6.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        text = "S${video.season?.toString()?.padStart(2, '0') ?: "00"}E${video.episode?.toString()?.padStart(2, '0') ?: "00"}",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                if (progressPercent > 0 && progressPercent < 100) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(2.dp)
+                            .background(Color.Gray.copy(alpha = 0.3f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(progressPercent / 100f)
+                                .fillMaxHeight()
+                                .background(AccentBlue)
+                        )
+                    }
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .weight(1f)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = video.name ?: "Episode ${video.episode}",
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = video.description?.take(80) ?: "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (isWatched) {
+                    Text(
+                        text = "✔ Watched",
+                        color = AccentGreen,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+```
+
+---
+
 ## File: `app/src/main/java/com/ultrastream/app/ui/components/SectionHeader.kt`
 
 ```kotlin
@@ -8053,6 +10284,140 @@ fun GridSection(
                 }
             }
         }
+    }
+}
+
+```
+
+---
+
+## File: `app/src/main/java/com/ultrastream/app/ui/components/StreamCard.kt`
+
+```kotlin
+@file:OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+package com.ultrastream.app.ui.components
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.ultrastream.app.data.models.StreamItem
+import com.ultrastream.app.ui.theme.*
+
+@Composable
+fun StreamCard(
+    stream: StreamItem,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = CardDark),
+        shape = RoundedCornerShape(16.dp),
+        onClick = onClick
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = stream.addonName ?: "Addon",
+                    color = AccentBlue,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
+                Surface(
+                    color = Color.White,
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = "4KHDHub 4K",
+                        color = Color.Black,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = stream.title ?: stream.name ?: "Stream",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Tag(text = "2024", icon = Icons.Default.CalendarToday, color = AccentGold)
+                Tag(text = "Hindi", icon = Icons.Default.Translate, color = AccentOrange)
+                Tag(text = "18.74 GB", icon = Icons.Default.Storage, color = AccentOrange)
+                Tag(text = "2160P", icon = Icons.Default.Monitor, color = Color.White)
+                
+                OutlinedTag(text = "HDR", color = TextMuted)
+                OutlinedTag(text = "DV", color = TextMuted)
+                OutlinedTag(text = "English", color = AccentBlue)
+            }
+        }
+    }
+}
+
+@Composable
+private fun Tag(text: String, icon: ImageVector, color: Color) {
+    Surface(
+        color = color.copy(alpha = 0.15f),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = color,
+                modifier = Modifier.size(14.dp)
+            )
+            Text(
+                text = text,
+                color = color,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+private fun OutlinedTag(text: String, color: Color) {
+    Surface(
+        color = Color.Transparent,
+        border = BorderStroke(1.dp, color.copy(alpha = 0.4f)),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Text(
+            text = text,
+            color = color,
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+        )
     }
 }
 

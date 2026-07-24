@@ -12,6 +12,8 @@ import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import com.ultrastream.app.network.StremioApi
 import com.ultrastream.app.network.RealDebridApi
+import com.ultrastream.app.network.AllDebridApi
+import com.ultrastream.app.network.PremiumizeApi
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
@@ -73,5 +75,23 @@ object NetworkModule {
             .baseUrl("https://api.real-debrid.com/rest/1.0/")
             .build()
             .create(RealDebridApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideAllDebridApi(retrofit: Retrofit): AllDebridApi {
+        return retrofit.newBuilder()
+            .baseUrl("https://api.alldebrid.com/v4/")
+            .build()
+            .create(AllDebridApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun providePremiumizeApi(retrofit: Retrofit): PremiumizeApi {
+        return retrofit.newBuilder()
+            .baseUrl("https://www.premiumize.me/api/")
+            .build()
+            .create(PremiumizeApi::class.java)
     }
 }

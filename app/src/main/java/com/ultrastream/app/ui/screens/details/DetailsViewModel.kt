@@ -2,12 +2,17 @@ package com.ultrastream.app.ui.screens.details
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import com.ultrastream.app.data.dao.*
 import com.ultrastream.app.data.models.*
 import com.ultrastream.app.data.preferences.PreferencesManager
 import com.ultrastream.app.data.repository.AddonRepository
 import com.ultrastream.app.data.repository.MetaRepository
 import com.ultrastream.app.data.repository.StreamRepository
+import com.ultrastream.app.network.StremioApi
+import com.ultrastream.app.utils.buildAddonBaseUrl
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,7 +30,9 @@ class DetailsViewModel @Inject constructor(
     private val watchProgressDao: WatchProgressDao,
     private val watchedEpisodeDao: WatchedEpisodeDao,
     private val libraryDao: LibraryDao,
-    private val watchlistDao: WatchlistDao
+    private val watchlistDao: WatchlistDao,
+    private val smartPlaylistDao: SmartPlaylistDao,
+    private val stremioApi: StremioApi
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DetailsUiState())
@@ -33,6 +40,23 @@ class DetailsViewModel @Inject constructor(
 
     private var currentSeason: Int? = null
     private var currentEpisode: Int? = null
+
+    // Filtered episodes & seasons
+    private val _filteredEpisodes = MutableStateFlow<List<Video>>(emptyList())
+    val filteredEpisodes: StateFlow<List<Video>> = _filteredEpisodes.asStateFlow()
+
+    private val _availableSeasons = MutableStateFlow<List<Int>>(emptyList())
+    val availableSeasons: StateFlow<List<Int>> = _availableSeasons.asStateFlow()
+
+    private val _selectedSeason = MutableStateFlow<Int?>(null)
+    val selectedSeason: StateFlow<Int?> = _selectedSeason.asStateFlow()
+
+    private val _isAllSeasons = MutableStateFlow(false)
+    val isAllSeasons: StateFlow<Boolean> = _isAllSeasons.asStateFlow()
+
+    private val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+    private val episodeListType = Types.newParameterizedType(List::class.java, PlaylistEpisode::class.java)
+    private val episodeAdapter = moshi.adapter<List<PlaylistEpisode>>(episodeListType)
 
     fun loadMeta(id: String, type: String) {
         viewModelScope.launch {
@@ -50,6 +74,7 @@ class DetailsViewModel @Inject constructor(
                     isLoading = false,
                     error = null
                 )
+                filterAndSortEpisodes(meta.videos)
             } else {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -59,10 +84,89 @@ class DetailsViewModel @Inject constructor(
         }
     }
 
-    fun selectSeason(season: Int) {
-        currentSeason = season
-        currentEpisode = null
-        _uiState.value = _uiState.value.copy(selectedSeason = season, selectedEpisode = null)
+    private fun filterAndSortEpisodes(episodes: List<Video>?) {
+        if (episodes == null) {
+            _filteredEpisodes.value = emptyList()
+            _availableSeasons.value = emptyList()
+            return
+        }
+        val filtered = mutableListOf<Video>()
+        val seen = mutableSetOf<String>()
+        val seasonMap = mutableMapOf<Int, MutableList<Video>>()
+        val junkPattern = Regex(
+            "opening|ending|creditless|ncop|nced|trailer|promo|teaser|ova|oav|special",
+            RegexOption.IGNORE_CASE
+        )
+
+        episodes.forEach { ep ->
+            if (ep.season == null || ep.episode == null) return@forEach
+            if (ep.season == 0 || ep.episode == 0) return@forEach
+            val name = ep.name ?: ep.title ?: ""
+            if (junkPattern.containsMatchIn(name)) return@forEach
+            if (listOf(480, 720, 1080, 2160, 264, 265).contains(ep.episode) && name.isBlank()) return@forEach
+            val key = "S${ep.season}E${ep.episode}"
+            if (seen.contains(key)) return@forEach
+            seen.add(key)
+            seasonMap.getOrPut(ep.season) { mutableListOf() }.add(ep)
+        }
+
+        seasonMap.values.forEach { it.sortBy { it.episode } }
+        // Remove outliers (gaps > 20)
+        seasonMap.values.forEach { seasonEpisodes ->
+            if (seasonEpisodes.size > 1) {
+                var prev = seasonEpisodes[0].episode
+                val toRemove = mutableListOf<Video>()
+                for (i in 1 until seasonEpisodes.size) {
+                    val current = seasonEpisodes[i].episode
+                    if (current > prev + 20) {
+                        toRemove.add(seasonEpisodes[i])
+                    }
+                    prev = current
+                }
+                seasonEpisodes.removeAll(toRemove)
+            }
+        }
+
+        val all = seasonMap.keys.sorted().flatMap { seasonMap[it] ?: emptyList() }
+        val seasons = all.mapNotNull { it.season }.distinct().sorted()
+        _availableSeasons.value = seasons
+        _filteredEpisodes.value = all
+        if (seasons.isNotEmpty() && _selectedSeason.value == null && !_isAllSeasons.value) {
+            _selectedSeason.value = seasons.first()
+        }
+        applySeasonFilter()
+    }
+
+    fun toggleAllSeasons() {
+        _isAllSeasons.value = !_isAllSeasons.value
+        if (_isAllSeasons.value) {
+            _selectedSeason.value = null
+        } else {
+            val seasons = _availableSeasons.value
+            if (seasons.isNotEmpty()) _selectedSeason.value = seasons.first()
+        }
+        applySeasonFilter()
+    }
+
+    fun selectSeason(season: Int?) {
+        _selectedSeason.value = season
+        if (season != null) _isAllSeasons.value = false
+        applySeasonFilter()
+    }
+
+    private fun applySeasonFilter() {
+        val all = _filteredEpisodes.value
+        if (all.isEmpty()) return
+        val result = if (_isAllSeasons.value || _selectedSeason.value == null) {
+            all
+        } else {
+            all.filter { it.season == _selectedSeason.value }
+        }
+        _filteredEpisodes.value = result
+    }
+
+    fun selectSeasonAndLoad(season: Int?) {
+        selectSeason(season)
         loadStreamsForCurrentSelection()
     }
 
@@ -142,6 +246,77 @@ class DetailsViewModel @Inject constructor(
             val resolved = streamRepository.resolveStream(stream, debridKey.takeIf { it.isNotBlank() })
             onResolved(resolved, title)
         }
+    }
+
+    // ============================================================
+    // SMART PLAYLIST CREATION (Room insertion)
+    // ============================================================
+    suspend fun createSmartPlaylist(meta: MetaItem, season: Int): Boolean {
+        return try {
+            val episodes = meta.videos?.filter { it.season == season } ?: emptyList()
+            if (episodes.isEmpty()) return false
+
+            val playlistEpisodes = episodes.map { ep ->
+                PlaylistEpisode(
+                    epNum = ep.episode ?: 0,
+                    epName = ep.name ?: "Episode ${ep.episode}",
+                    title = "${meta.name} - S${season}E${ep.episode}",
+                    stream = null,
+                    isMissing = true
+                )
+            }
+
+            val episodesJson = episodeAdapter.toJson(playlistEpisodes)
+            val playlist = SmartPlaylist(
+                id = "${meta.id}_S${season}_${System.currentTimeMillis()}",
+                metaId = meta.id,
+                metaName = meta.name,
+                poster = meta.poster,
+                season = season,
+                addon = "SmartPlaylist",
+                total = episodes.size,
+                fetched = 0,
+                status = "Pending",
+                episodesJson = episodesJson
+            )
+
+            smartPlaylistDao.insert(playlist)
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    // ============================================================
+    // SUBTITLE FETCHING FROM ADDONS
+    // ============================================================
+    suspend fun fetchSubtitles(metaId: String, type: String, season: Int, episode: Int): List<Subtitle> {
+        val allSubtitles = mutableListOf<Subtitle>()
+        val addons = addonRepository.getEnabledAddons()
+        val idWithExtra = "$metaId:$season:$episode"
+
+        for (addon in addons) {
+            val baseUrl = buildAddonBaseUrl(addon.url)
+            val url = "$baseUrl/subtitles/$type/$idWithExtra.json"
+            try {
+                val response = stremioApi.getSubtitles(url)
+                response.subtitles?.let { subs ->
+                    subs.forEach { netSub ->
+                        allSubtitles.add(
+                            Subtitle(
+                                url = netSub.url,
+                                file = netSub.file,
+                                lang = netSub.lang,
+                                name = netSub.name
+                            )
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                // skip this addon
+            }
+        }
+        return allSubtitles.distinctBy { it.url ?: it.file }
     }
 
     data class DetailsUiState(

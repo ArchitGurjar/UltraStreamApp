@@ -15,6 +15,9 @@ interface StremioApi {
 
     @GET
     suspend fun getStreams(@Url url: String): StreamResponse
+
+    @GET
+    suspend fun getSubtitles(@Url url: String): SubtitleResponse
 }
 
 data class ManifestResponse(
@@ -97,4 +100,8 @@ data class StreamSubtitle(
     val file: String?,
     val lang: String?,
     val name: String?
+)
+
+data class SubtitleResponse(
+    val subtitles: List<StreamSubtitle>? = emptyList()
 )
