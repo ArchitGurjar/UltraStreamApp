@@ -30,6 +30,7 @@ class AddonsViewModel @Inject constructor(
     init {
         loadAddons()
         observeDebridKey()
+        observeDebridProvider()
     }
 
     fun loadAddons() {
@@ -39,7 +40,8 @@ class AddonsViewModel @Inject constructor(
         }
     }
 
-    private fun observeDebridKey() {
+    private fun observeDebridKey()
+        observeDebridProvider() {
         viewModelScope.launch {
             preferencesManager.getDebridKey().collect { key ->
                 _uiState.value = _uiState.value.copy(debridKey = key)
@@ -120,6 +122,21 @@ class AddonsViewModel @Inject constructor(
         val addons: List<Addon> = emptyList(),
         val debridKey: String = ""
     )
+
+    private fun observeDebridProvider() {
+        viewModelScope.launch {
+            preferencesManager.getDebridProvider().collect { provider ->
+                _uiState.value = _uiState.value.copy(debridProvider = provider)
+            }
+        }
+    }
+
+
+    suspend fun saveDebridProvider(provider: String) {
+        preferencesManager.setDebridProvider(provider)
+        _uiState.value = _uiState.value.copy(debridProvider = provider)
+    }
+
 }
 
 data class StremioAddonExport(

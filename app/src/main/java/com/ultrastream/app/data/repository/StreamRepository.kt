@@ -84,10 +84,18 @@ class StreamRepository @Inject constructor(
         }
     }
 
-    suspend fun resolveStream(stream: StreamItem, debridKey: String?): StreamItem {
-        val resolvedUrl = debridHelper.resolveStreamUrl(stream.url ?: "", debridKey)
-        return stream.copy(url = resolvedUrl)
+    
+suspend fun resolveStream(stream: StreamItem, debridKey: String?): StreamItem {
+    val providerString = preferencesManager.getDebridProvider().first()
+    val provider = when (providerString) {
+        "alldebrid" -> DebridHelper.DebridProvider.ALL_DEBRID
+        "premiumize" -> DebridHelper.DebridProvider.PREMIUMIZE
+        else -> DebridHelper.DebridProvider.REAL_DEBRID
     }
+    val resolvedUrl = debridHelper.resolveStreamUrl(stream.url ?: "", debridKey, provider)
+    return stream.copy(url = resolvedUrl)
+}
+
 
     private fun convertStream(stream: Stream, addonName: String): StreamItem {
         return StreamItem(

@@ -7,6 +7,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -211,6 +215,42 @@ fun AddonsScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Save Debrid Key")
+        // Debrid Provider
+        item {
+            Text("Debrid Provider", style = MaterialTheme.typography.titleMedium)
+            var expanded by remember { mutableStateOf(false) }
+            ExposedDropdownMenuBox(
+                expanded = expanded,
+                onExpandedChange = { expanded = !expanded }
+            ) {
+                OutlinedTextField(
+                    value = selectedProvider,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Select Provider") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                    modifier = Modifier.fillMaxWidth().menuAnchor()
+                )
+                ExposedDropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    listOf("realdebrid", "alldebrid", "premiumize").forEach { provider ->
+                        DropdownMenuItem(
+                            text = { Text(provider.replaceFirstChar { it.uppercase() }) },
+                            onClick = {
+                                selectedProvider = provider
+                                expanded = false
+                                scope.launch {
+                                    viewModel.saveDebridProvider(provider)
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
             }
         }
 
