@@ -10,6 +10,7 @@ import com.ultrastream.app.data.models.Catalog
 import com.ultrastream.app.data.models.HistoryItem
 import com.ultrastream.app.data.models.MetaItem
 import com.ultrastream.app.data.models.Video
+import com.ultrastream.app.data.models.RecommendedAddon
 import com.ultrastream.app.data.repository.AddonRepository
 import com.ultrastream.app.data.repository.MetaRepository
 import com.ultrastream.app.data.repository.StreamRepository
@@ -125,12 +126,46 @@ class HomeViewModel @Inject constructor(
                 isLoading = false,
                 continueWatching = continueWatching,
                 addons = addons,
-                catalogRows = catalogRows.toSortedMap(compareBy { it })
+                catalogRows = catalogRows.toSortedMap(compareBy { it }),
+            recommendedAddons = getRecommendedAddons()
             )
         }
     }
 
     fun refresh() = loadHomeData()
+
+    // Hardcoded recommended addons list – can later be fetched from network
+    private suspend fun getRecommendedAddons(): List<RecommendedAddon> {
+        // In future, this could come from a curated list or a repository.
+        // For now, mirror the web app's recommended addons.
+        return listOf(
+            RecommendedAddon(
+                name = "Torrentio",
+                description = "Torrent scraper for movies & series",
+                url = "https://torrentio.strem.fun/manifest.json",
+                isInstalled = false
+            ),
+            RecommendedAddon(
+                name = "Cinemeta",
+                description = "Metadata provider for movies & series",
+                url = "https://cinemeta.strem.fun/manifest.json",
+                isInstalled = false
+            ),
+            RecommendedAddon(
+                name = "Juan Carlos 2",
+                description = "Streaming addon with 4K sources",
+                url = "https://juan-carlos.strem.fun/manifest.json",
+                isInstalled = false
+            ),
+            RecommendedAddon(
+                name = "Orion",
+                description = "Alternative scraper for premium content",
+                url = "https://orion.strem.fun/manifest.json",
+                isInstalled = false
+            )
+        )
+    }
+
 
     data class HomeUiState(
         val isLoading: Boolean = false,
