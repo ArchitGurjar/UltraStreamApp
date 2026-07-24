@@ -42,6 +42,8 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.ultrastream.app.data.models.StreamItem
 import com.ultrastream.app.data.models.Subtitle
+import com.ultrastream.app.utils.SubtitleHolder
+import com.ultrastream.app.utils.SubtitleEvent
 import com.ultrastream.app.ui.theme.AccentBlue
 import kotlinx.coroutines.delay
 
@@ -83,6 +85,13 @@ fun PlayerScreen(
     // Initialize player
     LaunchedEffect(stream, externalSubtitle) {
         viewModel.initializePlayer(context, stream, title, externalSubtitle)
+    }
+
+    // Listen for external subtitle selection events
+    LaunchedEffect(Unit) {
+        com.ultrastream.app.utils.SubtitleEvent.events.collect { subtitle ->
+            viewModel.addSubtitleAndRestart(subtitle)
+        }
     }
 
     // Lifecycle: pause on background, play on resume (unless locked)

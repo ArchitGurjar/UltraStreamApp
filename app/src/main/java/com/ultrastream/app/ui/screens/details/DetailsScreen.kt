@@ -36,6 +36,7 @@ import com.ultrastream.app.ui.components.EpisodeCard
 import com.ultrastream.app.ui.components.bottomsheets.StreamsSheet
 import com.ultrastream.app.ui.theme.*
 import com.ultrastream.app.utils.M3UExporter
+import com.ultrastream.app.utils.SubtitleHolder
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)

@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.ultrastream.app.ui.components.AnalyticsCard
 
 @Composable
 fun ProfileScreen(
@@ -50,6 +51,27 @@ fun ProfileScreen(
     ) {
         item {
             Text("Settings", style = MaterialTheme.typography.headlineMedium)
+        }
+        // Analytics Dashboard
+        item {
+            Text("Analytics", style = MaterialTheme.typography.titleMedium)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                AnalyticsCard(label = "Watched", value = uiState.watchedCount.toString())
+                AnalyticsCard(label = "In Progress", value = uiState.inProgressCount.toString())
+                AnalyticsCard(label = "Library", value = uiState.libraryCount.toString())
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                AnalyticsCard(label = "Watchlist", value = uiState.watchlistCount.toString())
+                AnalyticsCard(label = "History", value = uiState.historyCount.toString())
+                AnalyticsCard(label = "Completion", value = uiState.completionRate.toString() + "%")
+            }
+            Spacer(modifier = Modifier.height(16.dp))
         }
         item {
             Row(

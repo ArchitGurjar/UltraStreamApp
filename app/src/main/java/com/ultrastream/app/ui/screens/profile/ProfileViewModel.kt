@@ -37,6 +37,7 @@ class ProfileViewModel @Inject constructor(
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
 
     init {
+        loadAnalytics()
         viewModelScope.launch {
             preferencesManager.getTheme().collect { theme ->
                 _uiState.value = _uiState.value.copy(theme = theme)
@@ -182,4 +183,29 @@ class ProfileViewModel @Inject constructor(
         val addons: List<com.ultrastream.app.data.models.Addon>,
         val profiles: List<com.ultrastream.app.data.models.Profile>
     )
+
+    private fun loadAnalytics() {
+        viewModelScope.launch {
+            val library = libraryDao.getAll()
+            val watchlist = watchlistDao.getAll()
+            val history = historyDao.getAll()
+            val progressList = watchProgressDao.getAll()
+            val watchedCount = progressList.count { it.percent >= 100 }
+            val inProgressCount = progressList.count { it.percent in 1..99 }
+            val libraryCount = library.size
+            val watchlistCount = watchlist.size
+            val historyCount = history.size
+            val totalProgress = progressList.sumOf { it.percent.coerceIn(0, 100) }
+            val avgCompletion = if (progressList.isNotEmpty()) (totalProgress / progressList.size) else 0
+            _uiState.value = _uiState.value.copy(
+                watchedCount = watchedCount,
+                inProgressCount = inProgressCount,
+                libraryCount = libraryCount,
+                watchlistCount = watchlistCount,
+                historyCount = historyCount,
+                completionRate = avgCompletion
+            )
+        }
+    }
+
 }
