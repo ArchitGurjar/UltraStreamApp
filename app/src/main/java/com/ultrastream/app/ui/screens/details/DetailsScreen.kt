@@ -54,6 +54,8 @@ fun DetailsScreen(
 
     var showSeasonsSheet by remember { mutableStateOf(false) }
     var showStreamsSheet by remember { mutableStateOf(false) }
+        var selectedStream by remember { mutableStateOf<StreamItem?>(null) }
+    var showActionSheet by remember { mutableStateOf(false) }
     var showActionSheet by remember { mutableStateOf(false) }
     var selectedStream by remember { mutableStateOf<StreamItem?>(null) }
 
@@ -267,24 +269,44 @@ fun DetailsScreen(
                             }
 
                             // IMDb link (always visible)
-                            OutlinedButton(
-                                onClick = {
-                                    val imdbId = meta.imdbId
-                                    if (!imdbId.isNullOrBlank()) {
-                                        context.startActivity(
-                                            Intent(Intent.ACTION_VIEW, Uri.parse("https://www.imdb.com/title/$imdbId"))
-                                        )
+                            Column {
+                                OutlinedButton(
+                                    onClick = {
+                                        val imdbId = meta.imdbId
+                                        if (!imdbId.isNullOrBlank()) {
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.imdb.com/title/$imdbId")))
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(48.dp),
+                                    shape = RoundedCornerShape(50),
+                                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
+                                ) {
+                                    Icon(Icons.Default.Movie, contentDescription = null, tint = Color.White)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("View on IMDb", fontWeight = FontWeight.Bold, color = Color.White)
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                if (meta.videos?.any { it.url != null } == true) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            val trailerUrl = meta.videos?.firstOrNull { it.url != null }?.url
+                                            if (!trailerUrl.isNullOrBlank()) {
+                                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(trailerUrl)))
+                                            }
+                                        },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(48.dp),
+                                        shape = RoundedCornerShape(50),
+                                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
+                                    ) {
+                                        Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Watch Trailer", fontWeight = FontWeight.Bold, color = Color.White)
                                     }
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp),
-                                shape = RoundedCornerShape(50),
-                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
-                            ) {
-                                Icon(Icons.Default.Movie, contentDescription = null, tint = Color.White)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("View on IMDb", fontWeight = FontWeight.Bold, color = Color.White)
+                                }
                             }
                         }
                     }
@@ -399,6 +421,171 @@ fun DetailsScreen(
         StreamsSheet(
             streams = uiState.streams,
             onDismiss = { showStreamsSheet = false },
+            onStreamClick = { stream ->
+                showStreamsSheet = false
+                selectedStream = stream
+                showActionSheet = true
+            }
+        )
+    }
+
+    // Action sheet for selected stream
+    if (showActionSheet && selectedStream != null) {
+        val stream = selectedStream!!
+        val title = meta?.name ?: "Stream"
+        ModalBottomSheet(
+            onDismissRequest = { showActionSheet = false }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Text(
+                    text = "Stream Options",
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                // Play
+                Button(
+                    onClick = {
+                        showActionSheet = false
+                        viewModel.playStream(stream, title) { resolved, t ->
+                            onPlay(resolved, t)
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Play in Default Player", fontWeight = FontWeight.Bold)
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Action grid (2 columns)
+                val actions = mutableListOf<Pair<String, () -> Unit>>()
+
+                // Smart Playlist (only if series and episode info)
+                if (uiState.selectedEpisode != null && uiState.selectedSeason != null && isSeries && meta != null) {
+                    actions.add("Make Smart Playlist" to {
+                        scope.launch {
+                            val success = viewModel.createSmartPlaylist(meta, uiState.selectedSeason!!)
+                            if (success) {
+                                Toast.makeText(context, "Smart Playlist created!", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, "Failed to create playlist", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    })
+                }
+
+                actions.addAll(listOf(
+                    "Search Subtitles" to {
+                        scope.launch {
+                            if (uiState.selectedSeason != null && uiState.selectedEpisode != null && isSeries && meta != null) {
+                                val subs = viewModel.fetchSubtitles(
+                                    meta.id,
+                                    meta.type,
+                                    uiState.selectedSeason!!,
+                                    uiState.selectedEpisode!!
+                                )
+                                if (subs.isNotEmpty()) {
+                                    Toast.makeText(context, "✅ ${subs.size} subtitles found!", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "No subtitles available", Toast.LENGTH_SHORT).show()
+                                }
+                            } else {
+                                Toast.makeText(context, "Select an episode first", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    "Download / Open Browser" to {
+                        val url = stream.url ?: stream.streamUrl ?: stream.externalUrl
+                        if (!url.isNullOrBlank()) {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                            context.startActivity(Intent.createChooser(intent, "Open with"))
+                        } else {
+                            Toast.makeText(context, "No URL available", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    "Copy Magnet Link" to {
+                        val magnet = if (stream.url?.startsWith("magnet:") == true) stream.url
+                        else if (stream.infoHash != null) "magnet:?xt=urn:btih:${stream.infoHash}"
+                        else null
+                        if (magnet != null) {
+                            clipboard.setText(AnnotatedString(magnet))
+                            Toast.makeText(context, "Magnet copied to clipboard", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "No magnet link available", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    "Copy Video URL" to {
+                        val url = stream.url ?: stream.streamUrl ?: stream.externalUrl
+                        if (!url.isNullOrBlank()) {
+                            clipboard.setText(AnnotatedString(url))
+                            Toast.makeText(context, "URL copied to clipboard", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "No URL available", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    "Export .m3u" to {
+                        val url = stream.url ?: stream.streamUrl ?: stream.externalUrl
+                        if (!url.isNullOrBlank() && !url.startsWith("magnet:")) {
+                            val exporter = M3UExporter(context)
+                            val file = exporter.exportToM3U(listOf(stream), title)
+                            if (file != null) {
+                                exporter.shareM3U(file)
+                            } else {
+                                Toast.makeText(context, "Failed to create M3U", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            Toast.makeText(context, "Cannot export magnet or empty URL", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                ))
+
+                actions.chunked(2).forEach { row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        row.forEach { (label, action) ->
+                            OutlinedButton(
+                                onClick = {
+                                    action()
+                                    showActionSheet = false
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.onSurface
+                                )
+                            ) {
+                                Text(
+                                    label,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                        if (row.size == 1) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+        }
+    },
             onStreamClick = { stream ->
                 showStreamsSheet = false
                 selectedStream = stream
