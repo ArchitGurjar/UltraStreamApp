@@ -8,6 +8,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -17,6 +20,7 @@ import com.ultrastream.app.ui.components.HScrollRow
 import com.ultrastream.app.ui.components.bottomsheets.SmartPlaylistDetailSheet
 import com.ultrastream.app.ui.components.SectionHeader
 import com.ultrastream.app.data.models.MetaItem
+import com.ultrastream.app.data.models.SmartPlaylist
 
 @Composable
 fun LibraryScreen(
@@ -24,8 +28,8 @@ fun LibraryScreen(
     onItemClick: (id: String, type: String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var selectedPlaylist by remember { mutableStateOf<SmartPlaylist?>(null) }
-    var showPlaylistDetail by remember { mutableStateOf(false) }
+    
+    // Cleaned up UI State Variables (NO DUPLICATES)
     var selectedPlaylist by remember { mutableStateOf<SmartPlaylist?>(null) }
     var showPlaylistDetail by remember { mutableStateOf(false) }
 
@@ -69,30 +73,29 @@ fun LibraryScreen(
                 }
             }
 
-            
-        // Smart Playlists
-        item {
-            SectionHeader(title = "Smart Playlists")
-            if (uiState.smartPlaylists.isEmpty()) {
-                Text("No smart playlists", modifier = Modifier.padding(horizontal = 16.dp))
-            } else {
-                HScrollRow {
-                    uiState.smartPlaylists.forEach { playlist ->
-                        SmartPlaylistCard(
-                            playlist = playlist,
-                            onClick = { 
-                                selectedPlaylist = playlist
-                                showPlaylistDetail = true
-                            },
-                            onExportM3u = { viewModel.exportPlaylistM3U(it) },
-                            onPlayAll = { viewModel.playAll(it) }
-                        )
+            // Smart Playlists
+            item {
+                SectionHeader(title = "Smart Playlists")
+                if (uiState.smartPlaylists.isEmpty()) {
+                    Text("No smart playlists", modifier = Modifier.padding(horizontal = 16.dp))
+                } else {
+                    HScrollRow {
+                        uiState.smartPlaylists.forEach { playlist ->
+                            SmartPlaylistCard(
+                                playlist = playlist,
+                                onClick = { 
+                                    selectedPlaylist = playlist
+                                    showPlaylistDetail = true
+                                },
+                                onExportM3u = { viewModel.exportPlaylistM3U(it) },
+                                onPlayAll = { viewModel.playAll(it) }
+                            )
+                        }
                     }
                 }
             }
-        }
-        // Watchlist
 
+            // Watchlist
             item {
                 SectionHeader(title = "Watchlist")
                 if (uiState.watchlist.isEmpty()) {
@@ -168,8 +171,6 @@ fun LibraryScreen(
                 showPlaylistDetail = false
             },
             onManualPick = { episode ->
-                // Open a stream picker (implement later)
-                // For now, we just show a toast
                 viewModel.manualPickEpisode(playlist, episode)
             },
             onPlayEpisode = { episode ->
@@ -177,5 +178,4 @@ fun LibraryScreen(
             }
         )
     }
-
 }

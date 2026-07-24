@@ -1,7 +1,5 @@
 package com.ultrastream.app.ui.screens.profile
 
-import kotlinx.coroutines.launch
-
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -14,15 +12,16 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.ultrastream.app.ui.components.AnalyticsCard
+import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     viewModel: ProfileViewModel = hiltViewModel()
@@ -31,11 +30,8 @@ fun ProfileScreen(
     var expandedRating by remember { mutableStateOf(false) }
     var expandedLanguage by remember { mutableStateOf(false) }
     var showNewProfileDialog by remember { mutableStateOf(false) }
-    var newProfileName by remember { mutableStateOf(\"\") }
-    var expandedRating by remember { mutableStateOf(false) }
-    var expandedLanguage by remember { mutableStateOf(false) }
-    var showNewProfileDialog by remember { mutableStateOf(false) }
-    var newProfileName by remember { mutableStateOf(\"\") }
+    var newProfileName by remember { mutableStateOf("") }
+    
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -62,107 +58,194 @@ fun ProfileScreen(
         item {
             Text("Settings", style = MaterialTheme.typography.headlineMedium)
         }
-        // Analytics Dashboard
+
+        // Analytics Dashboard (Single Block)
         item {
             Text("Analytics", style = MaterialTheme.typography.titleMedium)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                AnalyticsCard(label = "Watched", value = uiState.watchedCount.toString())
-                AnalyticsCard(label = "In Progress", value = uiState.inProgressCount.toString())
-                AnalyticsCard(label = "Library", value = uiState.libraryCount.toString())
+                AnalyticsCard(label = "Watched", value = uiState.watchedCount.toString(), modifier = Modifier.weight(1f))
+                AnalyticsCard(label = "In Progress", value = uiState.inProgressCount.toString(), modifier = Modifier.weight(1f))
+                AnalyticsCard(label = "Library", value = uiState.libraryCount.toString(), modifier = Modifier.weight(1f))
             }
+            Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                AnalyticsCard(label = "Watchlist", value = uiState.watchlistCount.toString())
-                AnalyticsCard(label = "History", value = uiState.historyCount.toString())
-                AnalyticsCard(label = "Completion", value = uiState.completionRate.toString() + "%")
+                AnalyticsCard(label = "Watchlist", value = uiState.watchlistCount.toString(), modifier = Modifier.weight(1f))
+                AnalyticsCard(label = "History", value = uiState.historyCount.toString(), modifier = Modifier.weight(1f))
+                AnalyticsCard(label = "Completion", value = uiState.completionRate.toString() + "%", modifier = Modifier.weight(1f))
             }
             Spacer(modifier = Modifier.height(16.dp))
         }
-        // Analytics Dashboard
-        item {
-            Text("Analytics", style = MaterialTheme.typography.titleMedium)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                AnalyticsCard(label = "Watched", value = uiState.watchedCount.toString())
-                AnalyticsCard(label = "In Progress", value = uiState.inProgressCount.toString())
-                AnalyticsCard(label = "Library", value = uiState.libraryCount.toString())
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                AnalyticsCard(label = "Watchlist", value = uiState.watchlistCount.toString())
-                AnalyticsCard(label = "History", value = uiState.historyCount.toString())
-                AnalyticsCard(label = "Completion", value = uiState.completionRate.toString() + "%")
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-        }
+
+        // Theme toggle
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Theme")
+                Text("Dark Theme")
                 Switch(
-                    checked = uiState.theme == "light",
-                    onCheckedChange = {
-                        scope.launch { viewModel.toggleTheme() }
-                    }
+                    checked = uiState.theme == "dark",
+                    onCheckedChange = { scope.launch { viewModel.toggleTheme() } }
                 )
             }
         }
+
+        // Hindi Priority
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("Hindi Priority")
                 Switch(
                     checked = uiState.hindiPriority,
-                    onCheckedChange = {
-                        scope.launch { viewModel.toggleHindiPriority() }
-                    }
+                    onCheckedChange = { scope.launch { viewModel.toggleHindiPriority() } }
                 )
             }
         }
+
+        // Auto-play Next
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("Auto-play Next")
                 Switch(
                     checked = uiState.autoPlayNext,
-                    onCheckedChange = {
-                        scope.launch { viewModel.toggleAutoPlayNext() }
-                    }
+                    onCheckedChange = { scope.launch { viewModel.toggleAutoPlayNext() } }
                 )
             }
         }
+
+        // Parental Control toggle
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("Parental Control")
                 Switch(
                     checked = uiState.parentalControl,
-                    onCheckedChange = {
-                        scope.launch { viewModel.toggleParentalControl() }
-                    }
+                    onCheckedChange = { scope.launch { viewModel.toggleParentalControl() } }
                 )
             }
         }
+
+        // Parental Rating dropdown
         item {
-            Text("Profile: ${uiState.currentProfile}", style = MaterialTheme.typography.bodyLarge)
+            Text("Parental Rating", style = MaterialTheme.typography.titleMedium)
+            ExposedDropdownMenuBox(
+                expanded = expandedRating,
+                onExpandedChange = { expandedRating = !expandedRating }
+            ) {
+                OutlinedTextField(
+                    value = uiState.parentalRating,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Rating") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedRating) },
+                    modifier = Modifier.fillMaxWidth().menuAnchor()
+                )
+                ExposedDropdownMenu(
+                    expanded = expandedRating,
+                    onDismissRequest = { expandedRating = false }
+                ) {
+                    listOf("G", "PG", "PG-13", "R", "NC-17").forEach { rating ->
+                        DropdownMenuItem(
+                            text = { Text(rating) },
+                            onClick = {
+                                expandedRating = false
+                                scope.launch { viewModel.setParentalRating(rating) }
+                            }
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
         }
+
+        // Subtitle Language dropdown
+        item {
+            Text("Preferred Subtitle Language", style = MaterialTheme.typography.titleMedium)
+            ExposedDropdownMenuBox(
+                expanded = expandedLanguage,
+                onExpandedChange = { expandedLanguage = !expandedLanguage }
+            ) {
+                OutlinedTextField(
+                    value = uiState.subtitleLanguage,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Language") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedLanguage) },
+                    modifier = Modifier.fillMaxWidth().menuAnchor()
+                )
+                ExposedDropdownMenu(
+                    expanded = expandedLanguage,
+                    onDismissRequest = { expandedLanguage = false }
+                ) {
+                    listOf("English", "Hindi", "Spanish", "French", "German", "Tamil", "Telugu", "Malayalam").forEach { lang ->
+                        DropdownMenuItem(
+                            text = { Text(lang) },
+                            onClick = {
+                                expandedLanguage = false
+                                scope.launch { viewModel.setSubtitleLanguage(lang) }
+                            }
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
+        // Profile switching
+        item {
+            Text("Profiles", style = MaterialTheme.typography.titleMedium)
+            if (uiState.profiles.isEmpty()) {
+                Text("No profiles found. Create one.", style = MaterialTheme.typography.bodySmall)
+            } else {
+                uiState.profiles.forEach { profile ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(profile.name, style = MaterialTheme.typography.bodyLarge)
+                        if (profile.id == uiState.currentProfile) {
+                            Text("(Active)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                        } else {
+                            Button(
+                                onClick = { scope.launch { viewModel.switchProfile(profile.id) } },
+                                modifier = Modifier.width(80.dp)
+                            ) {
+                                Text("Switch")
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = { showNewProfileDialog = true },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Create New Profile")
+            }
+        }
+
+        // Export / Import / Reset
         item {
             Button(
                 onClick = {
@@ -202,5 +285,41 @@ fun ProfileScreen(
                 Text("Factory Reset")
             }
         }
+    }
+
+    // New Profile Dialog
+    if (showNewProfileDialog) {
+        AlertDialog(
+            onDismissRequest = { showNewProfileDialog = false },
+            title = { Text("Create Profile") },
+            text = {
+                OutlinedTextField(
+                    value = newProfileName,
+                    onValueChange = { newProfileName = it },
+                    label = { Text("Profile Name") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (newProfileName.isNotBlank()) {
+                            scope.launch {
+                                viewModel.createProfile(newProfileName)
+                                newProfileName = ""
+                                showNewProfileDialog = false
+                            }
+                        }
+                    }
+                ) {
+                    Text("Create")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNewProfileDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }

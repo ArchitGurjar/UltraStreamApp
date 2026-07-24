@@ -14,8 +14,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.ultrastream.app.ui.components.ContinueWatchingCard
 import com.ultrastream.app.ui.components.HScrollRow
 import com.ultrastream.app.ui.components.PosterCard
-import com.ultrastream.app.ui.components.SectionHeader
 import com.ultrastream.app.ui.components.RecommendedAddonCard
+import com.ultrastream.app.ui.components.SectionHeader
 
 @Composable
 fun HomeScreen(
@@ -43,12 +43,14 @@ fun HomeScreen(
                         )
                     }
                 }
+            }
+        }
 
-        // Recommended Addons
+        // Recommended Addons (Single Block)
         item {
-            SectionHeader(title = \"Recommended Addons\")
+            SectionHeader(title = "Recommended Addons")
             if (uiState.recommendedAddons.isEmpty()) {
-                Text(\"No recommendations\", modifier = Modifier.padding(horizontal = 16.dp))
+                Text("No recommendations", modifier = Modifier.padding(horizontal = 16.dp))
             } else {
                 HScrollRow {
                     uiState.recommendedAddons.forEach { addon ->
@@ -60,27 +62,6 @@ fun HomeScreen(
                         )
                     }
                 }
-            }
-        }
-
-        // Recommended Addons
-        item {
-            SectionHeader(title = \"Recommended Addons\")
-            if (uiState.recommendedAddons.isEmpty()) {
-                Text(\"No recommendations\", modifier = Modifier.padding(horizontal = 16.dp))
-            } else {
-                HScrollRow {
-                    uiState.recommendedAddons.forEach { addon ->
-                        RecommendedAddonCard(
-                            addon = addon,
-                            onInstall = { url ->
-                                // TODO: trigger install via ViewModel
-                            }
-                        )
-                    }
-                }
-            }
-        }
             }
         }
 
@@ -94,7 +75,6 @@ fun HomeScreen(
         } else {
             uiState.catalogRows.forEach { (rowId, items) ->
                 item {
-                    // Generate a human-friendly name from rowId
                     val parts = rowId.split("_")
                     val displayName = when {
                         parts.size >= 3 -> {

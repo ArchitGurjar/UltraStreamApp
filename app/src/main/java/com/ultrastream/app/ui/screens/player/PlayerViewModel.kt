@@ -1,19 +1,5 @@
 package com.ultrastream.app.ui.screens.player
 
-
-data class Quality(
-    val label: String,
-    val resolution: String? = null,
-    val bitrate: Int? = null
-)
-
-data class SubtitleTrack(
-    val index: Int,
-    val label: String,
-    val language: String
-)
-
-
 import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
@@ -36,6 +22,7 @@ import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import com.ultrastream.app.data.models.StreamItem
+import com.ultrastream.app.data.models.Subtitle
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -45,6 +32,18 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+data class Quality(
+    val label: String,
+    val resolution: String? = null,
+    val bitrate: Int? = null
+)
+
+data class SubtitleTrack(
+    val index: Int,
+    val label: String,
+    val language: String
+)
 
 data class AudioTrackInfo(val groupIndex: Int, val trackIndex: Int, val label: String, val language: String)
 data class SubtitleTrackInfo(val groupIndex: Int, val trackIndex: Int, val label: String, val language: String)
@@ -68,16 +67,7 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
     val error: StateFlow<String?> = _error.asStateFlow()
 
     private val _title = MutableStateFlow("")
-    private val _availableQualities = MutableStateFlow<List<Quality>>(emptyList())
-    val availableQualities: StateFlow<List<Quality>> = _availableQualities.asStateFlow()
-    private val _subtitleTracks = MutableStateFlow<List<SubtitleTrack>>(emptyList())
-    val subtitleTracks: StateFlow<List<SubtitleTrack>> = _subtitleTracks.asStateFlow()
-    private val _isLocked = MutableStateFlow(false)
-    val isLocked: StateFlow<Boolean> = _isLocked.asStateFlow()
-    private val _isFullscreen = MutableStateFlow(false)
-    val isFullscreen: StateFlow<Boolean> = _isFullscreen.asStateFlow()
-    private val _seekMessage = MutableStateFlow<String?>(null)
-    val seekMessage: StateFlow<String?> = _seekMessage.asStateFlow()    val title: StateFlow<String> = _title.asStateFlow()
+    val title: StateFlow<String> = _title.asStateFlow()
 
     private val _speed = MutableStateFlow(1.0f)
     val speed: StateFlow<Float> = _speed.asStateFlow()
@@ -94,11 +84,26 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
     private val _subtitleTracks = MutableStateFlow<List<SubtitleTrackInfo>>(emptyList())
     val subtitleTracks: StateFlow<List<SubtitleTrackInfo>> = _subtitleTracks.asStateFlow()
 
+    private val _availableQualities = MutableStateFlow<List<Quality>>(emptyList())
+    val availableQualities: StateFlow<List<Quality>> = _availableQualities.asStateFlow()
+
     private val _seekMessage = MutableStateFlow<String?>(null)
     val seekMessage: StateFlow<String?> = _seekMessage.asStateFlow()
 
+    private val _isLocked = MutableStateFlow(false)
+    val isLocked: StateFlow<Boolean> = _isLocked.asStateFlow()
+
+    private val _isFullscreen = MutableStateFlow(false)
+    val isFullscreen: StateFlow<Boolean> = _isFullscreen.asStateFlow()
+
+    private val _selectedSubtitleIndex = MutableStateFlow(-1)
+
     private var playerListener: Player.Listener? = null
     private var positionJob: Job? = null
+
+    private var currentContext: Context? = null
+    private var currentStream: StreamItem? = null
+    private var currentTitle: String? = null
 
     fun initializePlayer(context: Context, stream: StreamItem, title: String, externalSubtitle: Subtitle? = null) {
         currentContext = context
@@ -122,6 +127,7 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
                     .setUri(Uri.parse(url))
                     .setMediaMetadata(MediaMetadata.Builder().setTitle(title).build())
 
+                // Existing subtitles from stream
                 stream.subtitles?.let { subs ->
                     val configs = subs.mapNotNull { subtitle ->
                         val subUriStr = subtitle.url ?: return@mapNotNull null
@@ -140,6 +146,22 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
                     if (configs.isNotEmpty()) {
                         mediaItemBuilder.setSubtitleConfigurations(configs)
                     }
+                }
+
+                // External subtitle (if provided)
+                if (externalSubtitle != null && !externalSubtitle.url.isNullOrBlank()) {
+                    val mimeType = when {
+                        externalSubtitle.url.endsWith(".vtt", ignoreCase = true) -> "text/vtt"
+                        externalSubtitle.url.endsWith(".srt", ignoreCase = true) -> "application/x-subrip"
+                        else -> "text/vtt"
+                    }
+                    val config = MediaItem.SubtitleConfiguration.Builder(Uri.parse(externalSubtitle.url))
+                        .setMimeType(mimeType)
+                        .setLanguage(externalSubtitle.lang ?: "und")
+                        .setLabel(externalSubtitle.name ?: externalSubtitle.lang ?: "External Subtitle")
+                        .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                        .build()
+                    mediaItemBuilder.setSubtitleConfigurations(listOf(config))
                 }
 
                 val mediaItem = mediaItemBuilder.build()
@@ -171,40 +193,60 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
                     override fun onPlayerError(error: PlaybackException) {
                         _error.value = error.message
                     }
-                    
+
                     override fun onTracksChanged(tracks: Tracks) {
                         val audioList = mutableListOf<AudioTrackInfo>()
                         val subtitleList = mutableListOf<SubtitleTrackInfo>()
+                        val qualityList = mutableListOf<Quality>()
 
                         tracks.groups.forEachIndexed { groupIndex, trackGroup ->
-                            if (trackGroup.type == C.TRACK_TYPE_AUDIO) {
-                                for (trackIndex in 0 until trackGroup.length) {
-                                    val format = trackGroup.getTrackFormat(trackIndex)
-                                    audioList.add(
-                                        AudioTrackInfo(
-                                            groupIndex = groupIndex,
-                                            trackIndex = trackIndex,
-                                            label = format.label ?: format.language ?: "Audio $trackIndex",
-                                            language = format.language ?: "und"
+                            when (trackGroup.type) {
+                                C.TRACK_TYPE_AUDIO -> {
+                                    for (trackIndex in 0 until trackGroup.length) {
+                                        val format = trackGroup.getTrackFormat(trackIndex)
+                                        audioList.add(
+                                            AudioTrackInfo(
+                                                groupIndex = groupIndex,
+                                                trackIndex = trackIndex,
+                                                label = format.label ?: format.language ?: "Audio $trackIndex",
+                                                language = format.language ?: "und"
+                                            )
                                         )
-                                    )
+                                    }
                                 }
-                            } else if (trackGroup.type == C.TRACK_TYPE_TEXT) {
-                                for (trackIndex in 0 until trackGroup.length) {
-                                    val format = trackGroup.getTrackFormat(trackIndex)
-                                    subtitleList.add(
-                                        SubtitleTrackInfo(
-                                            groupIndex = groupIndex,
-                                            trackIndex = trackIndex,
-                                            label = format.label ?: format.language ?: "Subtitle $trackIndex",
-                                            language = format.language ?: "und"
+                                C.TRACK_TYPE_TEXT -> {
+                                    for (trackIndex in 0 until trackGroup.length) {
+                                        val format = trackGroup.getTrackFormat(trackIndex)
+                                        subtitleList.add(
+                                            SubtitleTrackInfo(
+                                                groupIndex = groupIndex,
+                                                trackIndex = trackIndex,
+                                                label = format.label ?: format.language ?: "Subtitle $trackIndex",
+                                                language = format.language ?: "und"
+                                            )
                                         )
-                                    )
+                                    }
+                                }
+                                C.TRACK_TYPE_VIDEO -> {
+                                    for (trackIndex in 0 until trackGroup.length) {
+                                        val format = trackGroup.getTrackFormat(trackIndex)
+                                        val resolution = if (format.height != null && format.width != null) {
+                                            "${format.height}p"
+                                        } else null
+                                        qualityList.add(
+                                            Quality(
+                                                label = format.label ?: "Quality",
+                                                resolution = resolution,
+                                                bitrate = format.bitrate
+                                            )
+                                        )
+                                    }
                                 }
                             }
                         }
                         _audioTracks.value = audioList
                         _subtitleTracks.value = subtitleList
+                        _availableQualities.value = qualityList
                     }
                 }
                 exoPlayer.addListener(listener)
@@ -330,6 +372,7 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
             .build()
         player.trackSelectionParameters = params
+        _selectedSubtitleIndex.value = -1
     }
 
     fun selectSubtitleTrack(info: SubtitleTrackInfo) {
@@ -343,6 +386,36 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
             )
             .build()
         player.trackSelectionParameters = params
+        _selectedSubtitleIndex.value = info.trackIndex
+    }
+
+    fun selectSubtitle(track: SubtitleTrack) {
+        val player = _player.value ?: return
+        val params = player.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            .build()
+        player.trackSelectionParameters = params
+        _selectedSubtitleIndex.value = track.index
+    }
+
+    fun selectQuality(quality: Quality) {
+        // Implementation depends on track selection; placeholder for now.
+    }
+
+    fun toggleLock() {
+        _isLocked.value = !_isLocked.value
+    }
+
+    fun toggleFullscreen() {
+        _isFullscreen.value = !_isFullscreen.value
+    }
+
+    fun addSubtitleAndRestart(subtitle: Subtitle?) {
+        val context = currentContext ?: return
+        val stream = currentStream ?: return
+        val title = currentTitle ?: return
+        releasePlayer()
+        initializePlayer(context, stream, title, subtitle)
     }
 
     fun releasePlayer() {
@@ -355,127 +428,4 @@ class PlayerViewModel @Inject constructor() : ViewModel() {
         _player.value = null
         playerListener = null
     }
-
-    fun toggleLock() {
-        _isLocked.value = !_isLocked.value
-    }
-
-    fun toggleFullscreen() {
-        _isFullscreen.value = !_isFullscreen.value
-    }
-
-    fun seekBy(offsetMs: Long) {
-        _player.value?.let { player ->
-            val newPos = player.currentPosition + offsetMs
-            player.seekTo(newPos.coerceIn(0, player.duration))
-            viewModelScope.launch {
-                _seekMessage.value = if (offsetMs > 0) "+${offsetMs/1000}s" else "-${-offsetMs/1000}s"
-                delay(800)
-                _seekMessage.value = null
-            }
-        }
-    }
-
-    fun selectQuality(quality: Quality) {
-        // Implementation depends on track selection; we'll keep a placeholder.
-        // For actual quality switching, we need to map quality to track selection.
-        // This will be implemented in the listener.
-    }
-
-    fun selectSubtitle(track: SubtitleTrack) {
-        val player = _player.value ?: return
-        // Disable all text tracks first, then enable the selected one.
-        val params = player.trackSelectionParameters.buildUpon()
-            .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
-            .build()
-        player.trackSelectionParameters = params
-        // Use the track index to select.
-        // We'll store the selected track and apply in onTracksChanged.
-        // For now, we store it.
-        _selectedSubtitleIndex.value = track.index
-        // Apply selection by using TrackSelectionOverride.
-        // We need to get the actual track group.
-        // We'll implement in the listener.
-    }
-
-    fun disableSubtitles() {
-        val player = _player.value ?: return
-        val params = player.trackSelectionParameters.buildUpon()
-            .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
-            .build()
-        player.trackSelectionParameters = params
-        _selectedSubtitleIndex.value = -1
-    }
-
-    private val _selectedSubtitleIndex = MutableStateFlow(-1)
-
-
-    private var currentContext: Context? = null
-    private var currentStream: StreamItem? = null
-    private var currentTitle: String? = null
-
-    fun addSubtitleAndRestart(subtitle: Subtitle?) {
-        val context = currentContext ?: return
-        val stream = currentStream ?: return
-        val title = currentTitle ?: return
-        // Release current player
-        releasePlayer()
-        // Reinitialize with new subtitle
-        initializePlayer(context, stream, title, subtitle)
-    }
-
-
-    fun toggleLock() {
-        _isLocked.value = !_isLocked.value
-    }
-
-    fun toggleFullscreen() {
-        _isFullscreen.value = !_isFullscreen.value
-    }
-
-    fun seekBy(offsetMs: Long) {
-        _player.value?.let { player ->
-            val newPos = player.currentPosition + offsetMs
-            player.seekTo(newPos.coerceIn(0, player.duration))
-            viewModelScope.launch {
-                _seekMessage.value = if (offsetMs > 0) "+${offsetMs/1000}s" else "-${-offsetMs/1000}s"
-                delay(800)
-                _seekMessage.value = null
-            }
-        }
-    }
-
-    fun selectQuality(quality: Quality) {
-        // Implementation depends on track selection; we'll keep a placeholder.
-        // For actual quality switching, we need to map quality to track selection.
-        // This will be implemented in the listener.
-    }
-
-    fun selectSubtitle(track: SubtitleTrack) {
-        val player = _player.value ?: return
-        // Disable all text tracks first, then enable the selected one.
-        val params = player.trackSelectionParameters.buildUpon()
-            .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
-            .build()
-        player.trackSelectionParameters = params
-        // Use the track index to select.
-        // We'll store the selected track and apply in onTracksChanged.
-        // For now, we store it.
-        _selectedSubtitleIndex.value = track.index
-        // Apply selection by using TrackSelectionOverride.
-        // We need to get the actual track group.
-        // We'll implement in the listener.
-    }
-
-    fun disableSubtitles() {
-        val player = _player.value ?: return
-        val params = player.trackSelectionParameters.buildUpon()
-            .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
-            .build()
-        player.trackSelectionParameters = params
-        _selectedSubtitleIndex.value = -1
-    }
-
-    private val _selectedSubtitleIndex = MutableStateFlow(-1)
-
 }
