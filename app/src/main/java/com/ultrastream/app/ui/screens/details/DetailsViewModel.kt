@@ -1,7 +1,6 @@
 package com.ultrastream.app.ui.screens.details
 
 import androidx.lifecycle.ViewModel
-import com.ultrastream.app.utils.LinkVerifier
 import androidx.lifecycle.viewModelScope
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
@@ -13,6 +12,7 @@ import com.ultrastream.app.data.repository.AddonRepository
 import com.ultrastream.app.data.repository.MetaRepository
 import com.ultrastream.app.data.repository.StreamRepository
 import com.ultrastream.app.network.StremioApi
+import com.ultrastream.app.utils.LinkVerifier
 import com.ultrastream.app.utils.buildAddonBaseUrl
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,7 +34,7 @@ class DetailsViewModel @Inject constructor(
     private val watchlistDao: WatchlistDao,
     private val smartPlaylistDao: SmartPlaylistDao,
     private val stremioApi: StremioApi,
-    private val linkVerifier: com.ultrastream.app.utils.LinkVerifier
+    private val linkVerifier: LinkVerifier
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DetailsUiState())
@@ -43,7 +43,6 @@ class DetailsViewModel @Inject constructor(
     private var currentSeason: Int? = null
     private var currentEpisode: Int? = null
 
-    // Filtered episodes & seasons
     private val _filteredEpisodes = MutableStateFlow<List<Video>>(emptyList())
     val filteredEpisodes: StateFlow<List<Video>> = _filteredEpisodes.asStateFlow()
 
@@ -86,13 +85,12 @@ class DetailsViewModel @Inject constructor(
         }
     }
 
-        private fun filterAndSortEpisodes(episodes: List<Video>?) {
+    private fun filterAndSortEpisodes(episodes: List<Video>?) {
         if (episodes == null) {
             _filteredEpisodes.value = emptyList()
             _availableSeasons.value = emptyList()
             return
         }
-        val filtered = mutableListOf<Video>()
         val seen = mutableSetOf<String>()
         val seasonMap = mutableMapOf<Int, MutableList<Video>>()
 
@@ -230,82 +228,70 @@ class DetailsViewModel @Inject constructor(
     }
 
     // ============================================================
-    // SMART PLAYLIST CREATION (Room insertion)
-    // ===================
+    // SMART PLAYLIST CREATION (Background fetch with verification)
+    // ============================================================
     suspend fun createSmartPlaylist(meta: MetaItem, season: Int): Boolean {
         return try {
             val episodes = meta.videos?.filter { it.season == season } ?: emptyList()
             if (episodes.isEmpty()) return false
 
-            val playlistEpisodes = mutableListOf<PlaylistEpisode>()
-
-            // Fetch streams for each episode and verify them
-            val addons = addonRepository.getEnabledAddons()
-            val addonUrls = addons.map { it.url }
-            val debridKey = preferencesManager.getDebridKey().first()
-
-            for (ep in episodes) {
-                val epNum = ep.episode ?: 0
-                val streams = streamRepository.getStreams(
-                    metaId = meta.id,
-                    metaType = meta.type,
-                    season = season,
-                    episode = epNum,
-                    addonUrls = addonUrls,
-                    hindiPriority = true,
-                    debridKey = debridKey.takeIf { it.isNotBlank() }
-                )
-                var validStream: StreamItem? = null
-                for (stream in streams) {
-                    val url = stream.url ?: stream.streamUrl ?: stream.externalUrl
-                    if (url != null && LinkVerifier().verifyLinkStatus(url)) {
-                        validStream = stream
-                        break
-                    }
-                }
-                if (validStream != null) {
-                    playlistEpisodes.add(
-                        PlaylistEpisode(
-                            epNum = epNum,
-                            epName = ep.name ?: "Episode $epNum",
-                            title = "${meta.name} - S${season}E$epNum",
-                            stream = validStream,
-                            isMissing = false
-                        )
-                    )
-                } else {
-                    playlistEpisodes.add(
-                        PlaylistEpisode(
-                            epNum = epNum,
-                            epName = ep.name ?: "Episode $epNum",
-                            title = "${meta.name} - S${season}E$epNum",
-                            stream = null,
-                            isMissing = true
-                        )
-                    )
-                }
-            }
-
-            val episodesJson = episodeAdapter.toJson(playlistEpisodes)
-            val playlist = SmartPlaylist(
-                id = "${meta.id}_S${season}_${System.currentTimeMillis()}",
+            val playlistId = "${meta.id}_S${season}_${System.currentTimeMillis()}"
+            val initialPlaylist = SmartPlaylist(
+                id = playlistId,
                 metaId = meta.id,
                 metaName = meta.name,
                 poster = meta.poster,
                 season = season,
                 addon = "SmartPlaylist",
                 total = episodes.size,
-                fetched = playlistEpisodes.count { it.stream != null },
-                status = if (playlistEpisodes.all { it.stream != null }) "Ready" else "Partial",
-                episodesJson = episodesJson
+                fetched = 0,
+                status = "Fetching...",
+                episodesJson = "[]"
             )
+            smartPlaylistDao.insert(initialPlaylist)
 
-            smartPlaylistDao.insert(playlist)
+            viewModelScope.launch {
+                val addons = addonRepository.getEnabledAddons().map { it.url }
+                val hindiPriority = preferencesManager.getHindiPriority().first()
+                val debridKey = preferencesManager.getDebridKey().first()
+                val fetchedEpisodes = mutableListOf<PlaylistEpisode>()
+
+                episodes.forEachIndexed { index, ep ->
+                    val epNum = ep.episode ?: 0
+                    val streams = streamRepository.getStreams(
+                        meta.id, meta.type, season, epNum, addons, hindiPriority, debridKey.takeIf { it.isNotBlank() }
+                    )
+                    var bestWorkingStream: StreamItem? = null
+                    for (stream in streams) {
+                        val sUrl = stream.url ?: stream.streamUrl ?: stream.externalUrl
+                        if (sUrl != null && !sUrl.startsWith("magnet:")) {
+                            if (linkVerifier.verifyLinkStatus(sUrl)) {
+                                bestWorkingStream = stream
+                                break
+                            }
+                        }
+                    }
+
+                    fetchedEpisodes.add(
+                        PlaylistEpisode(
+                            epNum = epNum,
+                            epName = ep.name ?: "Episode $epNum",
+                            title = "${meta.name} - S${season}E$epNum",
+                            stream = bestWorkingStream,
+                            isMissing = bestWorkingStream == null
+                        )
+                    )
+
+                    val updatedPlaylist = initialPlaylist.copy(
+                        fetched = index + 1,
+                        status = if (index + 1 == episodes.size) "Ready" else "Fetching...",
+                        episodesJson = episodeAdapter.toJson(fetchedEpisodes)
+                    )
+                    smartPlaylistDao.insert(updatedPlaylist)
+                }
+            }
             true
         } catch (e: Exception) {
-            false
-        }
-    }Exception) {
             false
         }
     }
